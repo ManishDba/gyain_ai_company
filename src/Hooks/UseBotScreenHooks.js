@@ -1,80 +1,73 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Keyboard, Platform, PermissionsAndroid, Animated } from 'react-native';
-
-import { useDispatch, useSelector } from 'react-redux';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import VoiceToText, {
-  VoiceToTextEvents,
-} from '@appcitor/react-native-voice-to-text';
-
-import axios from '../../services/axios';
-import axiosWl from '../../services/axiosWl';
-import endpoint from '../../services/endpoint';
-
-import { setCategory } from '../reducers/ask.slice';
-
-// import mobileStringReplacement from "../components/mobileStringReplacement";
-import {
-  extractPeriod,
-  dateKeywordReplace,
-} from '../components/dateKeywordReplace';
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Keyboard, Platform, PermissionsAndroid } from "react-native";
+import axios from "../../services/axios";
+import endpoint from "../../services/endpoint";
+import { useDispatch, useSelector } from "react-redux";
+import { setCategory } from "../reducers/ask.slice";
+import { Animated } from "react-native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
+// import WORD_REPLACEMENTS from "../components/wordReplacements"
+import { dateKeywordReplace } from "../components/dateKeywordReplace";
+import { extractPeriod } from "../components/extractPeriod";
+import axiosWl from "../../services/axiosWl";
 
 const greetings = [
-  'hi',
-  'hello',
-  'hey',
-  'hii',
-  'helo',
-  'heloo',
-  'hai',
-  'yo',
-  'sup',
-  'hola',
-  'namaste',
-  'wassup',
-  'gm',
-  'good morning',
-  'good evening',
-  'good afternoon',
-  '👋',
-  '🙋‍♂️',
-  '🙋‍♀️',
+  "hi",
+  "hello",
+  "hey",
+  "hii",
+  "helo",
+  "heloo",
+  "hai",
+  "yo",
+  "sup",
+  "hola",
+  "namaste",
+  "wassup",
+  "gm",
+  "good morning",
+  "good evening",
+  "good afternoon",
+  "👋",
+  "🙋‍♂️",
+  "🙋‍♀️",
 ];
 
 const numeric_data_types = [
-  'int',
-  'integer',
-  'float',
-  'double',
-  'decimal',
-  'number',
-  'numeric',
+  "int",
+  "integer",
+  "float",
+  "double",
+  "decimal",
+  "number",
+  "numeric",
 ];
+const date_data_format = ["date", "datetime", "timestamp"];
 
-const UseBotScreenHooks = ({ route }) => {
+const useBotScreenHooks = ({ route }) => {
   const lastTapRef = useRef(null);
+  const shouldIgnoreVoiceResults = useRef(false);
+
   const dispatch = useDispatch();
   const navigation = useNavigation();
-  const catagoryName = route?.params?.Cat_name;
 
+  const catagoryName = route?.params?.Cat_name;
   const correspondents = useSelector((state) => state.askSlice.Category?.results || []);
-  const configData = useSelector(state => state.usersSlice.config || {});
-  const configworddata = Array.isArray(configData) ? configData[0] : configData;
-  const userdetails = useSelector(state => state.authSlice.userDetails || {});
+
+  const configData = useSelector((state) => state.usersSlice.config || {});
+  const userdetails = useSelector((state) => state.authSlice.userDetails || {});
   const botLevel = configData[0]?.bot_level;
   const botOptions =configData?.[0]?.bot_options_control?.split(',') || [];
-  
-  const hasDDMMYYYY = botOptions.includes('@ddmmyyyy');
+  const configworddata = Array.isArray(configData) ? configData[0] : configData;
   const dateFormatOption = botOptions.find(opt =>
   opt.startsWith('@dateFormat=')
 );
-
+ 
 const datePattern = dateFormatOption
   ? dateFormatOption.replace('@dateFormat=', '').toLowerCase()
   : 'dd/mm/yyyy'; // default
-
   const [messages, setMessages] = useState([]);
-  const [inputText, setInputText] = useState('');
+  const [inputText, setInputText] = useState("");
   const [filteredSlugs, setFilteredSlugs] = useState([]);
   const [matchSlugs, setMatchSlugs] = useState([]);
   const [apiresponse, setApiResponse] = useState([]);
@@ -82,90 +75,98 @@ const datePattern = dateFormatOption
   const [currentActiveSlug, setCurrentActiveSlug] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [sttStatus, setSttStatus] = useState('Disconnected');
-  const [partialText, setPartialText] = useState('');
+  const [sttStatus, setSttStatus] = useState("Disconnected");
+  const [partialText, setPartialText] = useState("");
+  const [volume, setVolume] = useState(0);
   const [paginationState, setPaginationState] = useState({});
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [filtersByTable, setFiltersByTable] = useState({});
+
   const [activeFilterColumnsByTable, setActiveFilterColumnsByTable] = useState(
-    {},
+    {}
   );
   const [selectedKeyItems, setSelectedKeyItems] = useState({});
   const [periodTextsByTable, setPeriodTextsByTable] = useState({});
-  const [loadingDots, setLoadingDots] = useState('');
+  const [loadingDots, setLoadingDots] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [disableAutoScroll, setDisableAutoScroll] = useState(false);
 
   const matchedCategory = correspondents.find(item => item.id === currentActiveSlug.id);
   const shouldHitMediaAPI = matchedCategory?.doc_images === true;
+  const silenceTimer = useRef(null);
+  const SILENCE_TIMEOUT = 5000; // 5 seconds
 
   const itemsPerPage = 7;
   const wsRef = useRef(null);
+  const isWsAuthenticated = useRef(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const flatListRef = useRef(null);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     setRefreshing(false);
-    navigation.navigate('BotCategory');
+    navigation.navigate("BotCategory");
   }, [navigation]);
-
-  const getReadableTextFromHtml = (html = '') => {
+  const getReadableTextFromHtml = (html = "") => {
     return html
-      .replace(/<\/(tr|p|div|h[1-6])>/gi, '\n')
-      .replace(/<\/(th|td)>/gi, ': ')
-      .replace(/<[^>]*>/g, '')
-      .replace(/\s+/g, ' ')
+      .replace(/<\/(tr|p|div|h[1-6])>/gi, "\n")
+      .replace(/<\/(th|td)>/gi, ": ")
+      .replace(/<[^>]*>/g, "")
+      .replace(/\s+/g, " ")
       .trim();
   };
+  const tokenize = (name) => {
+    return name
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/[_\s-]+/g, " ")
+      .toLowerCase()
+      .split(" ");
+  };
 
-  // const tokenize = (name) => {
-  //   return name
-  //     .replace(/([a-z])([A-Z])/g, "$1 $2")
-  //     .replace(/[_\s-]+/g, " ")
-  //     .toLowerCase()
-  //     .split(" ");
-  // };
-
-  const isValidNumber = value => {
+  const isValidNumber = (value) => {
     if (value === null || value === undefined) return false;
-    const clean = String(value).replace(/,/g, '').trim();
+    const clean = String(value).replace(/,/g, "").trim();
     return /^-?\d+(\.\d+)?$/.test(clean);
   };
 
-  const isOnlyTotalNonEmpty = arr => {
+  const isOnlyTotalNonEmpty = (arr) => {
     return arr.every((val, idx) =>
-      idx === 0 ? val === 'Total' : val === '' || val === null,
+      idx === 0 ? val === "Total" : val === "" || val === null
     );
   };
 
-  const generateFooterRowWithInference = response => {
+  const generateFooterRowWithInference = (response) => {
     if (!response.Rows || response.Rows.length <= 1) return [];
 
-    const { total_stop_words = '', decimal_stop_words = '' } =
+    const { total_stop_words = "", decimal_stop_words = "" } =
       configworddata || {};
 
+    //console.log("🔧 total_stop_words:", total_stop_words);
+
     const totalStopWords = total_stop_words
-      .split(',')
-      .map(w => w.trim().toLowerCase())
+      .split(",")
+      .map((w) => w.trim().toLowerCase())
       .filter(Boolean);
 
+    //console.log("🔧 totalStopWords array:", totalStopWords);
+
     const decimalStopWordsRaw = decimal_stop_words
-      .split(',')
-      .map(w => w.trim())
+      .split(",")
+      .map((w) => w.trim())
       .filter(Boolean);
 
     const decimalStopWords = decimalStopWordsRaw
-      .filter(w => !w.startsWith('#'))
-      .map(w => w.toLowerCase().replace(/[_\s]+/g, ''));
+      .filter((w) => !w.startsWith("#"))
+      .map((w) => w.toLowerCase().replace(/[_\s]+/g, ""));
 
     const hashDecimalStopWords = decimalStopWordsRaw
-      .filter(w => w.startsWith('#'))
-      .map(w =>
+      .filter((w) => w.startsWith("#"))
+      .map((w) =>
         w
-          .replace(/^#/, '')
+          .replace(/^#/, "")
           .toLowerCase()
-          .replace(/[_\s]+/g, ''),
+          .replace(/[_\s]+/g, "")
       );
 
     const footer = [];
@@ -173,21 +174,21 @@ const datePattern = dateFormatOption
 
     const pushMessage = () => {
       if (!totalPlaced) {
-        footer.push('Total');
+        footer.push("Total");
         totalPlaced = true;
       } else {
-        footer.push('');
+        footer.push("");
       }
     };
 
     response.Columns.forEach((entry, index) => {
-      const originalColumnName = (entry?.Name || '').toLowerCase();
-      const normalizedColumnName = originalColumnName.replace(/[_\s]+/g, '');
+      const originalColumnName = (entry?.Name || "").toLowerCase();
+      const normalizedColumnName = originalColumnName.replace(/[_\s]+/g, "");
 
-      // Check if column name contains any stop word
-      const isTotalStop = totalStopWords.some(word => {
+      // Use regex to match stop words
+      const isTotalStop = totalStopWords.some((word) => {
         // Create regex with word boundaries to match whole words only
-        const wordRegex = new RegExp(`\\b${word}\\b`, 'i');
+        const wordRegex = new RegExp(`\\b${word}\\b`, "i");
         const matches = wordRegex.test(originalColumnName);
         return matches;
       });
@@ -209,17 +210,17 @@ const datePattern = dateFormatOption
         for (const row of response.Rows) {
           const cellValue = row[index];
           let raw;
-          if (typeof cellValue === 'number') {
+          if (typeof cellValue === "number") {
             raw = cellValue;
           } else {
-            raw = String(cellValue).replace(/,/g, '').trim();
+            raw = String(cellValue).replace(/,/g, "").trim();
           }
 
           if (
-            raw === 'Unknown' ||
-            raw === '' ||
-            raw === 'null' ||
-            raw === 'undefined'
+            raw === "Unknown" ||
+            raw === "" ||
+            raw === "null" ||
+            raw === "undefined"
           ) {
             continue;
           } else if (!/^-?\d+(\.\d+)?$/.test(String(raw))) {
@@ -231,19 +232,19 @@ const datePattern = dateFormatOption
         }
 
         if (isMalformed) {
-          footer.push('');
+          footer.push("");
         } else {
-          const isHashDecimalStop = hashDecimalStopWords.some(w =>
-            normalizedColumnName.includes(w),
+          const isHashDecimalStop = hashDecimalStopWords.some((w) =>
+            normalizedColumnName.includes(w)
           );
-          const isDecimalStop = decimalStopWords.some(w =>
-            normalizedColumnName.includes(w),
+          const isDecimalStop = decimalStopWords.some((w) =>
+            normalizedColumnName.includes(w)
           );
 
           // 🔧 Always show round figures (no decimals)
           const roundedSum = Math.round(sum);
 
-          footer.push(roundedSum.toLocaleString('en-IN'));
+          footer.push(roundedSum.toLocaleString("en-IN"));
         }
       } else {
         pushMessage();
@@ -251,24 +252,24 @@ const datePattern = dateFormatOption
     });
 
     return footer;
-  };
+  };   
 
-const formatDateDynamic = (value, pattern = 'dd/mm/yyyy') => {
+  const formatDateDynamic = (value, pattern = 'dd/mm/yyyy') => {
   if (!value) return '';
-
+ 
   let str = String(value).trim();
-
+ 
   // ❌ Remove timestamp always
   if (str.includes('T')) str = str.split('T')[0];
   if (str.includes(' ')) str = str.split(' ')[0];
-
+ 
   let yyyy, mm, dd;
-
+ 
   // yyyy-mm-dd
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
     [yyyy, mm, dd] = str.split('-');
   }
-
+ 
   // dd/mm/yyyy OR mm/dd/yyyy
   else if (/^\d{2}\/\d{2}\/\d{4}$/.test(str)) {
     const parts = str.split('/');
@@ -279,12 +280,12 @@ const formatDateDynamic = (value, pattern = 'dd/mm/yyyy') => {
       [dd, mm, yyyy] = parts;
     }
   }
-
+ 
   // dd,mm,yyyy
   else if (/^\d{2},\d{2},\d{4}$/.test(str)) {
     [dd, mm, yyyy] = str.split(',');
   }
-
+ 
   // yyyymmdd
   else if (/^\d{8}$/.test(str)) {
     yyyy = str.slice(0, 4);
@@ -293,46 +294,44 @@ const formatDateDynamic = (value, pattern = 'dd/mm/yyyy') => {
   } else {
     return value; // unknown → return original
   }
-
+ 
   // 🔥 Dynamic token replace
   return pattern
     .replace('yyyy', yyyy)
     .replace('mm', mm)
     .replace('dd', dd);
 };
-
-
-
+   
 const formatCellValue = (cell, columnName, columnType) => {
   const { decimal_stop_words = '' } = configworddata || {};
-
+ 
   const normalizedColumnName = (columnName || '')
     .toLowerCase()
     .replace(/[_\s]+/g, '');
-
+ 
   const decimalStopWordsRaw = decimal_stop_words
     .split(',')
     .map(w => w.trim())
     .filter(Boolean);
-
+ 
   const decimalStopWords = decimalStopWordsRaw
     .filter(w => !w.startsWith('#'))
     .map(w => w.toLowerCase().replace(/[_\s]+/g, ''));
-
+ 
   const hashDecimalStopWords = decimalStopWordsRaw
     .filter(w => w.startsWith('#'))
     .map(w =>
       w.replace(/^#/, '').toLowerCase().replace(/[_\s]+/g, '')
     );
-
+ 
   const isTextColumn = columnType?.toLowerCase() === 'text';
   const isDateColumn = columnType?.toLowerCase() === 'date';
-
+ 
   // ✅ Text
   if (isTextColumn) {
     return cell && String(cell).trim() !== '' ? String(cell) : '';
   }
-
+ 
   // ✅ Empty / null
   if (
     cell === null ||
@@ -342,35 +341,35 @@ const formatCellValue = (cell, columnName, columnType) => {
   ) {
     return '';
   }
-
+ 
   // ✅ DATE — highest priority (dynamic pattern)
   if (isDateColumn) {
     return formatDateDynamic(cell, datePattern);
   }
-
+ 
   // ✅ Numbers
   if (isValidNumber(cell)) {
     const num =
       typeof cell === 'number'
         ? cell
         : parseFloat(String(cell).replace(/,/g, ''));
-
+ 
     const isHashDecimalStop = hashDecimalStopWords.some(w =>
       normalizedColumnName.includes(w)
     );
     const isDecimalStop = decimalStopWords.some(w =>
       normalizedColumnName.includes(w)
     );
-
+ 
     if (isHashDecimalStop) {
       return num.toString();
     }
-
+ 
     if (isDecimalStop) {
       return Math.round(num).toLocaleString('en-IN');
     }
-
-   //ONLY service years – return as-is
+ 
+    // ✅ ONLY service years – return as-is
    if (normalizedColumnName.includes('serviceyears')) {
     return num.toString();
     }
@@ -380,16 +379,14 @@ const formatCellValue = (cell, columnName, columnType) => {
       maximumFractionDigits: 2,
     });
   }
-
+ 
   // ✅ Fallback date (agar columnType missing ho)
   if (String(cell).match(/\d{4}-\d{2}-\d{2}/)) {
     return formatDateDynamic(cell, datePattern);
   }
-
+ 
   return String(cell);
 };
-
-
 
   const initializeContextWithFirstSlug = async (slugs, matchedSlugs) => {
     const now = new Date();
@@ -397,20 +394,20 @@ const formatCellValue = (cell, columnName, columnType) => {
     const localTime = new Date(now.getTime() + istOffset * 60000);
     const hour = localTime.getUTCHours();
 
-    let greeting = 'Good evening';
+    let greeting = "Good evening";
     if (hour >= 5 && hour < 12) {
-      greeting = 'Good morning';
+      greeting = "Good morning";
     } else if (hour >= 12 && hour < 17) {
-      greeting = 'Good afternoon';
+      greeting = "Good afternoon";
     }
 
-    setMessages(prevMessages => [
+    setMessages((prevMessages) => [
       ...prevMessages,
       {
         text: `${greeting} ~${userdetails?.first_name} ${userdetails?.last_name}~. How may I help you?`,
         data: {},
-        type: 'greeting',
-        sender: 'system',
+        type: "greeting",
+        sender: "system",
         hideVoice: true, // 👈 Add this flag
       },
     ]);
@@ -422,7 +419,7 @@ const formatCellValue = (cell, columnName, columnType) => {
         display: firstSlug.display,
       });
 
-      const matched = matchedSlugs.find(item => item.id === firstSlug.id);
+      const matched = matchedSlugs.find((item) => item.id === firstSlug.id);
 
       if (!matched) return;
 
@@ -430,23 +427,23 @@ const formatCellValue = (cell, columnName, columnType) => {
       const slugText = { query: firstSlug };
       const keywordsText = { keywords: name };
 
-      setMessages(prevMessages => [
+      setMessages((prevMessages) => [
         ...prevMessages,
         {
           text: display,
           data: {},
-          type: 'text',
-          sender: 'user',
+          type: "text",
+          sender: "user",
         },
       ]);
       if (matched.html_code)
-        setMessages(prevMessages => [
+        setMessages((prevMessages) => [
           ...prevMessages,
           {
             text: matched.html_code,
             data: {},
-            type: 'text',
-            sender: 'system',
+            type: "text",
+            sender: "system",
             hideVoice: true, // 👈 Add this flag
           },
         ]);
@@ -459,8 +456,8 @@ const formatCellValue = (cell, columnName, columnType) => {
 
         let success = true;
 
-        results.forEach(result => {
-          if (result.status === 'fulfilled') {
+        results.forEach((result) => {
+          if (result.status === "fulfilled") {
             setApiResponse(result?.value?.data);
           } else {
             success = false;
@@ -470,30 +467,32 @@ const formatCellValue = (cell, columnName, columnType) => {
         if (success && html_code) {
         }
       } catch (error) {
-        console.log('Unexpected error during initialization:', error);
+        console.log("Unexpected error during initialization:", error);
       }
     }
   };
 
-  const calculateColumnWidths = data => {
+  const calculateColumnWidths = (data) => {
     if (!data?.Columns || !data?.Rows) return [];
 
-    const formatHeaderName = name => {
-      if (!name) return '';
+    const formatHeaderName = (name) => {
+      if (!name) return "";
       return name
-        .replace(/_/g, ' ')
-        .split(' ')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-        .join(' ');
+        .replace(/_/g, " ")
+        .split(" ")
+        .map(
+          (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        )
+        .join(" ");
     };
 
     return data.Columns.map((column, columnIndex) => {
       // Use formatted header name for width calculation
       let maxWidth = formatHeaderName(column.Name).length * 2;
-      data.Rows.forEach(row => {
+      data.Rows.forEach((row) => {
         const cellContent = row[columnIndex];
         const cellString =
-          typeof cellContent === 'number'
+          typeof cellContent === "number"
             ? cellContent.toFixed(2)
             : String(cellContent);
         const cellWidth = cellString.length; // Consistent multiplier
@@ -502,66 +501,78 @@ const formatCellValue = (cell, columnName, columnType) => {
       return Math.max(maxWidth, 120); // Ensure minimum width
     });
   };
-
   useEffect(() => {
     let interval;
     if (isGenerating) {
       interval = setInterval(() => {
-        setLoadingDots(prev => (prev.length < 6 ? prev + '.' : ''));
+        setLoadingDots((prev) => (prev.length < 6 ? prev + "." : ""));
       }, 500);
     } else {
-      setLoadingDots('');
+      setLoadingDots("");
     }
     return () => clearInterval(interval);
   }, [isGenerating]);
 
   const fetchMediaSearch = async (message) => {
-  try {
-    const mediaRes = await axiosWl.post(endpoint.mediaSearch(), {
-      query_text: message,
-    });
-
-    const mediaData = mediaRes?.data || [];
-
-    if (Array.isArray(mediaData) && mediaData.length > 0) {
-      setMessages(prev => [
-        ...prev,
-        {
-          text: 'Related Videos',
-          data: mediaData,
-          type: 'media',
-          sender: 'system',
-        },
-      ]);
+    try {
+      const mediaRes = await axiosWl.post(endpoint.mediaSearch(), {
+        query_text: message,
+      });
+   
+      const mediaData = mediaRes?.data || [];
+   
+      if (Array.isArray(mediaData) && mediaData.length > 0) {
+        setMessages(prev => [
+          ...prev,
+          {
+            text: 'Related Videos',
+            data: mediaData,
+            type: 'media',
+            sender: 'system',
+          },
+        ]);
+      }
+    } catch (err) {
+      console.log("Media API Error:", err);
     }
-  } catch (err) {
-    console.log("Media API Error:", err);
-  }
   };
+   
+  const sendMessage = async (message) => {
+    // Set flag to ignore any pending voice results
+    shouldIgnoreVoiceResults.current = true;
+    // Stop mic first
+    if (isRecording) {
+      try {
+        await Voice.stop();
+        await Voice.cancel();
+        setIsRecording(false);
+        setSttStatus("Disconnected");
+      } catch (error) {
+        console.log("Error stopping mic:", error);
+      }
+    }
 
-  const sendMessage = async message => {
-    if (!message.trim() || isGenerating) return; // ✅ Prevent if already generating
+    // Clear input immediately
+    setInputText("");
+    setPartialText("");
 
-    const lowerCaseMessage = message.trim().toLowerCase();
+    if (message.trim()) {
+      const lowerCaseMessage = message.trim().toLowerCase();
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        { text: message, data: {}, type: "text", sender: "user" },
+      ]);
+      Keyboard.dismiss();
 
-    // Add user message
-    setMessages(prevMessages => [
-      ...prevMessages,
-      { text: message, data: {}, type: 'text', sender: 'user' },
-    ]);
-
-    setInputText('');
-    Keyboard.dismiss();
-
-    if (matchedCategory?.bot_disallowed) {
+  if (matchedCategory?.bot_disallowed) {
   const msg = message.toLowerCase();
- 
+
   const matchedWord = matchedCategory.bot_disallowed
     .toLowerCase()
     .split(",")
     .map(w => w.trim())
     .find(word => new RegExp(`\\b${word}\\b`, "i").test(msg));
- 
+
   if (matchedWord) {
     setMessages(prev => [
       ...prev,
@@ -573,72 +584,73 @@ const formatCellValue = (cell, columnName, columnType) => {
     ]);
     return; // 🔴 stop here
   }
-      }
+}
 
-    // Greeting response
-    if (greetings.includes(lowerCaseMessage)) {
-      setMessages(prevMessages => [
+      if (greetings.includes(lowerCaseMessage)) {
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          {
+            text: "Hello! How can I help you?",
+            data: {},
+            type: "text",
+            sender: "system",
+          },
+        ]);
+        return;
+      }
+      setIsGenerating(true);
+      setMessages((prevMessages) => [
         ...prevMessages,
-        {
-          text: 'Hello! How can I help you?',
-          data: {},
-          type: 'text',
-          sender: 'system',
-        },
+        { type: "loading", sender: "system" },
       ]);
-      return;
-    }
 
-    // Show "Generating..." loader message
-    setIsGenerating(true);
-    setMessages(prevMessages => [
-      ...prevMessages,
-      { text: 'Generating', data: {}, type: 'loading', sender: 'system' },
-    ]);
+      let enrichedMessage = message;
+      if (selectedKeyItems && Object.keys(selectedKeyItems).length > 0) {
+        const filterMessageParts = Object.entries(selectedKeyItems)
+          .filter(([_, value]) => value && value !== "")
+          .map(([key, value]) => `${key} ${value}`);
 
-    // Enrich message
-    let enrichedMessage = message;
-    if (selectedKeyItems && Object.keys(selectedKeyItems).length > 0) {
-      const filterMessageParts = Object.entries(selectedKeyItems)
-        .filter(([_, value]) => value && value !== '')
-        .map(([key, value]) => `${key} ${value}`);
-
-      if (filterMessageParts.length > 0) {
-        enrichedMessage = `${message} for ${filterMessageParts.join(' and ')}`;
+        if (filterMessageParts.length > 0) {
+          enrichedMessage = `${message} for ${filterMessageParts.join(
+            " and "
+          )}`;
+        }
       }
-    }
 
-    try {
       const response = await callSourcesContextAPI(enrichedMessage);
       await fetchQueryResult(enrichedMessage, response);
-      if (shouldHitMediaAPI) {
-         await fetchMediaSearch(message);
-      }
-      setIsGenerating(false);
-      setMessages(prevMessages =>
-        prevMessages.filter(msg => msg.type !== 'loading'),
-      );
-    } catch (error) {
-      console.error('Error:', error);
-      setIsGenerating(false);
-      setMessages(prevMessages => [
-        ...prevMessages.filter(msg => msg.type !== 'loading'),
-        {
-          text: 'Something went wrong. Please try again.',
-          data: {},
-          type: 'text',
-          sender: 'system',
-        },
-      ]);
     }
+    if (shouldHitMediaAPI) {
+      await fetchMediaSearch(message);
+   }
+    setDisableAutoScroll(true);
+    setMessages((prevMessages) =>
+      prevMessages.filter((msg) => msg.type !== "loading")
+    );
+    setIsGenerating(false);
+
+    setTimeout(() => {
+      setDisableAutoScroll(false);
+    }, 200);
+
+    // // Then add bot reply (real text)
+    // setMessages(prevMessages => [
+    //   ...prevMessages,
+    //   {
+    //     text: messages, // ✅ actual text, not blank!
+    //     data: {},
+    //     type: "text",
+    //     sender: "system",
+    //   }
+    // ]);
   };
 
-  const callSourcesContextAPI = async query => {
+  const callSourcesContextAPI = async (query) => {
     try {
       const slugToUse = currentActiveSlug || filteredSlugs[0];
 
       if (slugToUse) {
-        const matched = matchSlugs.find(item => item.id === slugToUse.id);
+        const matched = matchSlugs.find((item) => item.id === slugToUse.id);
         const { name } = matched || {};
 
         const payloadData = {
@@ -648,50 +660,72 @@ const formatCellValue = (cell, columnName, columnType) => {
 
         const result = await axiosWl.post(
           endpoint.sourcesContext(),
-          payloadData,
+          payloadData
         );
+        const data = result?.data;
+        // Convert to string for HTML detection (e.g., "Are you human?" page)
+        const responseText =
+          typeof data === "string" ? data : JSON.stringify(data || {});
+
+        if (
+          responseText.startsWith("<!DOCTYPE html>") ||
+          responseText.includes("Are you human?") ||
+          responseText.includes("__zenedge") ||
+          responseText.includes("captcha") ||
+          responseText.trim() === ""
+        ) {
+          console.warn("⚠️ Captcha or invalid response detected");
+          setMessages((prev) => [
+            ...prev,
+            {
+              text: "No Data Found! Please provide more clarity in your query...!",
+              data: {},
+              type: "text",
+              sender: "system",
+              hideVoice: true,
+            },
+          ]);
+          return [];
+        }
         if (result?.data && result.data.length > 0) {
           setApiResponse(result.data);
           return result.data;
         } else if (
-  (!Array.isArray(result?.data) || result.data.length === 0) &&
-  (!Array.isArray(apiresponse) || apiresponse.length === 0)
-) {
-  // ⭐ If media API will run → DO NOT show "No Data Found!"
-  if (!shouldHitMediaAPI) {
-    setMessages(prev => [
-      ...prev,
-      {
-        text: 'No Data Found! Please provide more clarity in your query...!',
-        data: {},
-        type: 'text',
-        sender: 'system',
-        hideVoice: true,
-      },
-    ]);
-  }
-  return [];
-}
+          (!Array.isArray(result?.data) || result.data.length === 0) &&
+          (!Array.isArray(apiresponse) || apiresponse.length === 0)
+        ) {
+          // ⭐ If media API will run → DO NOT show "No Data Found!"
+          if (!shouldHitMediaAPI) {
+            setMessages(prev => [
+              ...prev,
+              {
+                text: 'No Data Found! Please provide more clarity in your query...!',
+                data: {},
+                type: 'text',
+                sender: 'system',
+                hideVoice: true,
+              },
+            ]);
+          }
+          return [];
+        }
       }
     } catch (error) {
-      console.error('Error calling sourcesContext API:', error);
-
-      // ✅ Only show message if apiresponse is also empty
+      console.error("Error calling sourcesContext API:", error);
       if (!Array.isArray(apiresponse) || apiresponse.length === 0) {
-  if (!shouldHitMediaAPI) {
-    setMessages(prev => [
-      ...prev,
-      {
-        text: 'No Data Found! Please provide more clarity in your query...!',
-        data: {},
-        type: 'text',
-        sender: 'system',
-        hideVoice: true,
-      },
-    ]);
-  }
-}
-
+        if (!shouldHitMediaAPI) {
+          setMessages(prev => [
+            ...prev,
+            {
+              text: 'No Data Found! Please provide more clarity in your query...!',
+              data: {},
+              type: 'text',
+              sender: 'system',
+              hideVoice: true,
+            },
+          ]);
+        }
+      }
       return [];
     }
   };
@@ -708,55 +742,55 @@ const formatCellValue = (cell, columnName, columnType) => {
       // Step 1: Extract source IDs
       const docIds =
         dataToUse
-          .filter(item => item.source === 'doc')
-          .flatMap(item => item.source_id) || [];
+          .filter((item) => item.source === "doc")
+          .flatMap((item) => item.source_id) || [];
 
       const apiIds =
         dataToUse
-          .filter(item => item.source === 'url')
-          .flatMap(item => item.source_id) || [];
+          .filter((item) => item.source === "url")
+          .flatMap((item) => item.source_id) || [];
 
       const sqIndicatorsIds =
         dataToUse
-          .filter(item => item.source === 'sq')
-          .flatMap(item => item.source_id) || [];
+          .filter((item) => item.source === "sq")
+          .flatMap((item) => item.source_id) || [];
 
       const savequeryId =
         dataToUse
-          .filter(item => item.source === 'sq')
-          .flatMap(item =>
-            Array.isArray(item.source_id) ? item.source_id : [item.source_id],
+          .filter((item) => item.source === "sq")
+          .flatMap((item) =>
+            Array.isArray(item.source_id) ? item.source_id : [item.source_id]
           ) || [];
 
       const xlsQueryItems =
         dataToUse
-          .filter(item => item.source === 'sql')
-          .flatMap(item =>
-            item.source_id.map(id => ({
+          .filter((item) => item.source === "sql")
+          .flatMap((item) =>
+            item.source_id.map((id) => ({
               source: item.source,
               source_id: id,
-            })),
+            }))
           ) || [];
 
       const slugToUse = currentActiveSlug || filteredSlugs[0];
-      const matched = matchSlugs.find(item => item.id === slugToUse?.id);
+      const matched = matchSlugs.find((item) => item.id === slugToUse?.id);
       const { name, display } = matched || {};
 
       // keywords that should disable period extraction
       const YEAR_KEYWORDS = [
-        'all year',
-        'all years',
-        'year wise',
-        'yearwise',
-        'year-wise',
-        'year wise report',
-        'all yrs', // optional extensions you can add
+        "all year",
+        "all yrs",
+        "all years",
+        "year wise",
+        "yearwise",
+        "year-wise",
+        "year wise report", // optional extensions you can add
       ];
 
       // helper: returns true if text contains any year-keyword
-      function containsYearKeyword(text = '') {
-        const s = String(text || '').toLowerCase();
-        return YEAR_KEYWORDS.some(k => s.includes(k));
+      function containsYearKeyword(text = "") {
+        const s = String(text || "").toLowerCase();
+        return YEAR_KEYWORDS.some((k) => s.includes(k));
       }
 
       // ------------------ main logic ------------------
@@ -765,9 +799,9 @@ const formatCellValue = (cell, columnName, columnType) => {
       let periodResult = [];
       let sqIdOnlyPromises = [];
       let sqResponses = [];
-      let rawName = '';
-      let replacedName = '';
-      let currentPeriodText = '';
+      let rawName = "";
+      let replacedName = "";
+      let currentPeriodText = "";
 
       // If the *user query* explicitly asks for "all year / yearwise", skip period extraction
       const skipBecauseUserAskedYearwise = containsYearKeyword(query);
@@ -784,14 +818,14 @@ const formatCellValue = (cell, columnName, columnType) => {
         if (!hasPeriodInQuery) {
           if (savequeryId && savequeryId.length > 0) {
             // fetch saved queries
-            sqIdOnlyPromises = savequeryId.map(idValue =>
-              axiosWl.get(endpoint.savedquerybyid(idValue)),
+            sqIdOnlyPromises = savequeryId.map((idValue) =>
+              axiosWl.get(endpoint.savedquerybyid(idValue))
             );
 
             sqResponses = await Promise.all(sqIdOnlyPromises);
 
             // if multiple saved queries, you might want to iterate — using first as before
-            rawName = sqResponses?.[0]?.data?.name || '';
+            rawName = sqResponses?.[0]?.data?.name || "";
 
             // If the saved query name contains "all year" / "yearwise", skip extraction too.
             const skipBecauseSavedQueryIsYearwise =
@@ -817,13 +851,13 @@ const formatCellValue = (cell, columnName, columnType) => {
         }
       }
 
-      const sqPromises = sqIndicatorsIds.map(id =>
+      const sqPromises = sqIndicatorsIds.map((id) =>
         axiosWl.post(endpoint.sqindicators(), {
           saved_query_id: id,
           qfilter: query,
           limit: 500,
           bot_name: `${display} -M`,
-        }),
+        })
       );
 
       const xlsPromises = xlsQueryItems.map(({ source, source_id }) =>
@@ -833,7 +867,7 @@ const formatCellValue = (cell, columnName, columnType) => {
           source,
           bot_name: `${display} -M`,
           limit: 500,
-        }),
+        })
       );
 
       const aiDocPromise =
@@ -852,14 +886,15 @@ const formatCellValue = (cell, columnName, columnType) => {
         ...xlsPromises,
         ...sqIdOnlyPromises,
       ];
+
       if (allPromises.length === 0) {
-        setMessages(prev => [
+        setMessages((prev) => [
           ...prev,
           {
-            text: 'No relevant data sources available for your query.',
+            text: "No relevant data sources available for your query.",
             data: {},
-            type: 'text',
-            sender: 'system',
+            type: "text",
+            sender: "system",
             hideVoice: true,
           },
         ]);
@@ -872,20 +907,20 @@ const formatCellValue = (cell, columnName, columnType) => {
       let shownNoDataMessage = false;
       let tableCounter = 0; // 🆕 Counter for unique table keys
 
-      results.forEach(result => {
-        if (result.status === 'fulfilled') {
+      results.forEach((result) => {
+        if (result.status === "fulfilled") {
           const data = result.value.data;
           if (data && data.Columns && data.Rows) {
             if (data.Columns.length === 0) {
               if (!shownNoDataMessage) {
                 shownNoDataMessage = true;
-                setMessages(prev => [
+                setMessages((prev) => [
                   ...prev,
                   {
-                    text: 'No Data Found! Please provide more clarity in your query...!',
+                    text: "No Data Found! Please provide more clarity in your query...!",
                     data: {},
-                    type: 'text',
-                    sender: 'system',
+                    type: "text",
+                    sender: "system",
                     hideVoice: true,
                   },
                 ]);
@@ -896,17 +931,17 @@ const formatCellValue = (cell, columnName, columnType) => {
               const tableKey = `table_${Date.now()}_${tableCounter}`; // 🆕 Unique key
 
               // 🆕 Store period text for this specific table
-              setPeriodTextsByTable(prev => {
+              setPeriodTextsByTable((prev) => {
                 const updated = {
                   ...prev,
                   [tableKey]: currentPeriodText,
                 };
-                // console.log(
-                //   "📝 Storing period for key:",
-                //   tableKey,
-                //   "->",
-                //   currentPeriodText
-                // );
+                console.log(
+                  "📝 Storing period for key:",
+                  tableKey,
+                  "->",
+                  currentPeriodText
+                );
                 return updated;
               });
 
@@ -917,20 +952,20 @@ const formatCellValue = (cell, columnName, columnType) => {
               dataWithKey.tableKey = tableKey;
               dataWithKey.periodText = currentPeriodText;
 
-              setMessages(prev => [
+              setMessages((prev) => [
                 ...prev,
                 {
-                  text: '',
+                  text: "",
                   data: dataWithKey,
-                  type: chartData ? 'chart' : 'tab',
-                  sender: 'system',
+                  type: chartData ? "chart" : "tab",
+                  sender: "system",
                 },
               ]);
             }
-          } else if (typeof data === 'string' && data.trim() !== '') {
+          } else if (typeof data === "string" && data.trim() !== "") {
             hasValidResult = true;
 
-            if (data.includes('<table')) {
+            if (data.includes("<table")) {
               const parsed = extractHtmlSections(data);
 
               if (
@@ -943,17 +978,17 @@ const formatCellValue = (cell, columnName, columnType) => {
                 const tableKey = `table_${Date.now()}_${tableCounter}`;
 
                 // 🆕 Store period text for HTML table
-                setPeriodTextsByTable(prev => {
+                setPeriodTextsByTable((prev) => {
                   const updated = {
                     ...prev,
                     [tableKey]: currentPeriodText,
                   };
-                  // console.log(
-                  //   "📝 Storing period for HTML key:",
-                  //   tableKey,
-                  //   "->",
-                  //   currentPeriodText
-                  // );
+                  console.log(
+                    "📝 Storing period for HTML key:",
+                    tableKey,
+                    "->",
+                    currentPeriodText
+                  );
                   return updated;
                 });
 
@@ -974,69 +1009,70 @@ const formatCellValue = (cell, columnName, columnType) => {
                   },
                 ]);
               } else {
-                setMessages(prev => [
+                setMessages((prev) => [
                   ...prev,
                   {
                     text: data,
                     data: {},
-                    type: 'text',
-                    sender: 'system',
+                    type: "text",
+                    sender: "system",
                   },
                 ]);
               }
             } else {
-              setMessages(prev => [
+              setMessages((prev) => [
                 ...prev,
                 {
                   text:
-                    data.trim() !== '<html><body></body></html>'
+                    data.trim() !== "<html><body></body></html>"
                       ? data
-                      : 'No Data Found for your Query',
+                      : "No Data Found for your Query",
                   data: {},
-                  type: 'text',
-                  sender: 'system',
+                  type: "text",
+                  sender: "system",
                 },
               ]);
             }
           }
         } else {
-          setMessages(prev => [
+          setMessages((prev) => [
             ...prev,
             {
-              text: '',
+              text: "",
               data: {},
-              type: 'text',
-              sender: 'system',
+              type: "text",
+              sender: "system",
             },
           ]);
         }
       });
 
       if (!hasValidResult && !shownNoDataMessage) {
-        setMessages(prev => [
+        setMessages((prev) => [
           ...prev,
           {
-            text: 'No Data Found! Please provide more clarity in your query...!',
+            text: "No Data Found! Please provide more clarity in your query...!",
             data: {},
-            type: 'text',
-            sender: 'system',
+            type: "text",
+            sender: "system",
             hideVoice: true,
           },
         ]);
       }
     } catch (error) {
-      setMessages(prev => [
+      setMessages((prev) => [
         ...prev,
         {
-          text: 'Something went wrong! Please try again.',
+          text: "Something went wrong! Please try again.",
           data: {},
-          type: 'text',
-          sender: 'system',
+          type: "text",
+          sender: "system",
           hideVoice: true,
         },
       ]);
     }
   };
+
   const extractHtmlSections = (html) => {
     // 1. Extract main heading (h5)
     const h5Match = html.match(/<h5[^>]*>(.*?)<\/h5>/i);
@@ -1190,12 +1226,12 @@ const formatCellValue = (cell, columnName, columnType) => {
 
   const fetchCorrespondents = async () => {
     try {
-const response = await axios.get(endpoint.category());
+      const response = await axios.get(endpoint.category());
       const respons = await axios.get(endpoint.Usersettings())
 const canViewCategory =
   Array.isArray(respons.data.permissions) &&
   respons.data.permissions.includes("view_category");
- 
+
 if (!canViewCategory) {
   setMatchSlugs([]);
   return; // Stop further processing
@@ -1203,23 +1239,24 @@ if (!canViewCategory) {
 setMatchSlugs(response.data.results);
 
       let slugs = [];
-
+      const isSuperUser = respons.data.user.is_superuser;
       if (botLevel === 1) {
         slugs = response.data.results
           .filter(
-            item => item.division === catagoryName && item.visible !== false,
+            (item) => item.division === catagoryName &&
+           (isSuperUser || item.visible !== false)
           )
           .sort((a, b) => a.sequence - b.sequence);
       } else {
         slugs = response.data.results
-          .filter(item => item.visible !== false)
-          .sort((a, b) => a.sequence - b.sequence);
+    .filter(
+      (item) => isSuperUser || item.visible !== false
+    )
       }
-
-      const clearOptions = ['Clear', 'Clear All'];
+      const clearOptions = ["Clear", "Clear All"];
       const filteredSlugs = slugs
-        .filter(slug => !clearOptions.includes(slug.display))
-        .map(item => ({
+        .filter((slug) => !clearOptions.includes(slug.display))
+        .map((item) => ({
           id: item.id,
           name: item.name,
           display: item.display,
@@ -1230,36 +1267,37 @@ setMatchSlugs(response.data.results);
       if (filteredSlugs.length > 0) {
         await initializeContextWithFirstSlug(
           filteredSlugs,
-          response.data.results,
+          response.data.results
         );
       }
     } catch (error) {
-      console.error('Error fetching correspondents:', error);
+      console.error("Error fetching correspondents:", error);
     }
   };
 
-  const handleSlugPress = async slug => {
+  const handleSlugPress = async (slug) => {
+    // slug is now an object: { id, display, ... }
     if (currentActiveSlug?.id === slug.id) {
       return;
     }
     setCurrentActiveSlug(slug);
 
-    if (slug.display === 'Clear' || slug.display === 'Clear All') {
+    if (slug.display === "Clear" || slug.display === "Clear All") {
       setMessages([]);
       setApiResponse(null);
       try {
-        await axiosWl.post(endpoint.clearContext(), { query: 'Clear' });
+        await axiosWl.post(endpoint.clearContext(), { query: "Clear" });
       } catch (error) {
-        console.error('Failed to clear context:', error);
+        console.error("Failed to clear context:", error);
       }
       return;
     }
 
     // Match by id
-    const matched = matchSlugs.find(d => d.id === slug.id);
+    const matched = matchSlugs.find((d) => d.id === slug.id);
     const { name } = matched || {};
     // Filter by id
-    const filteredDiv = matchSlugs.filter(d => d.id === slug.id);
+    const filteredDiv = matchSlugs.filter((d) => d.id === slug.id);
     const slugData = matched; // same as matched now
     const slugText = { query: slug.display }; // sending display name as query
     const keywordsText = { keywords: name };
@@ -1270,156 +1308,155 @@ setMatchSlugs(response.data.results);
       ]);
 
       results.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
+        if (result.status === "fulfilled") {
           setApiResponse(result?.value?.data);
         } else {
           console.error(`API ${index + 1} failed:`, result.reason);
         }
       });
     } catch (error) {
-      console.log('Unexpected error:', error);
+      console.log("Unexpected error:", error);
     }
 
     // Set messages with display text
-    setMessages(prevMessages => {
+    setMessages((prevMessages) => {
       const newMessages = [
         ...prevMessages,
-        { text: slug.display, data: {}, type: 'text', sender: 'user' },
+        { text: slug.display, data: {}, type: "text", sender: "user" },
       ];
 
       if (filteredDiv?.length > 0 && slugData && slugData.html_code) {
         newMessages.push({
-          text: '',
+          text: "",
           data: {
-            actionBtns: filteredDiv.map(d => d.name),
+            actionBtns: filteredDiv.map((d) => d.name),
             text: slugData.html_code,
           },
-          type: 'action',
-          sender: 'system',
+          type: "action",
+          sender: "system",
         });
       }
 
       return newMessages;
     });
   };
-
-  const isValidNumberchart = value => {
-    if (value === null || value === undefined || value === '') return false;
+  const isValidNumberchart = (value) => {
+    if (value === null || value === undefined || value === "") return false;
     const num = Number(value);
     return !isNaN(num) && isFinite(num);
   };
 
-  const analyzeDataForChart = data => {
+  const analyzeDataForChart = (data) => {
     // Enhanced data validation with detailed error checking
     if (!data) {
-      console.warn('Data is null or undefined');
+      console.warn("Data is null or undefined");
       return {
         shouldRenderChart: false,
-        type: 'table',
-        reason: 'No data provided',
+        type: "table",
+        reason: "No data provided",
       };
     }
 
-    if (typeof data !== 'object') {
-      console.warn('Data is not an object');
+    if (typeof data !== "object") {
+      console.warn("Data is not an object");
       return {
         shouldRenderChart: false,
-        type: 'table',
-        reason: 'Invalid data format - not an object',
+        type: "table",
+        reason: "Invalid data format - not an object",
       };
     }
 
     if (!data.Columns || !Array.isArray(data.Columns)) {
-      console.warn('Data.Columns is missing or not an array');
+      console.warn("Data.Columns is missing or not an array");
       return {
         shouldRenderChart: false,
-        type: 'table',
-        reason: 'Invalid data structure - Columns missing or invalid',
+        type: "table",
+        reason: "Invalid data structure - Columns missing or invalid",
       };
     }
 
     if (!data.Rows || !Array.isArray(data.Rows)) {
-      console.warn('Data.Rows is missing or not an array');
+      console.warn("Data.Rows is missing or not an array");
       return {
         shouldRenderChart: false,
-        type: 'table',
-        reason: 'Invalid data structure - Rows missing or invalid',
+        type: "table",
+        reason: "Invalid data structure - Rows missing or invalid",
       };
     }
 
     if (data.Rows.length === 0) {
-      console.warn('Data.Rows is empty');
+      console.warn("Data.Rows is empty");
       return {
         shouldRenderChart: false,
-        type: 'table',
-        reason: 'No data rows available',
+        type: "table",
+        reason: "No data rows available",
       };
     }
 
     // Validate that each row is an array and has the correct length
     const expectedColumnCount = data.Columns.length;
     const invalidRows = data.Rows.filter(
-      row => !Array.isArray(row) || row.length !== expectedColumnCount,
+      (row) => !Array.isArray(row) || row.length !== expectedColumnCount
     );
 
     if (invalidRows.length > 0) {
       console.warn(`Found ${invalidRows.length} invalid rows`);
       return {
         shouldRenderChart: false,
-        type: 'table',
-        reason: 'Invalid row structure detected',
+        type: "table",
+        reason: "Invalid row structure detected",
       };
     }
 
-    if (data.type === 'table') {
+    if (data.type === "table") {
       return {
         shouldRenderChart: false,
-        type: 'table',
-        reason: 'Data type explicitly set to table',
+        type: "table",
+        reason: "Data type explicitly set to table",
       };
     }
 
     // Safe column mapping with validation
     const columns = data.Columns.map((col, index) => {
-      if (!col || typeof col !== 'object') {
+      if (!col || typeof col !== "object") {
         console.warn(`Invalid column at index ${index}`);
         return {
           name: `Column_${index}`,
-          type: 'string',
+          type: "string",
         };
       }
 
       return {
         name: col.Name || `Column_${index}`,
-        type: col.Type ? col.Type.toLowerCase() : 'string',
+        type: col.Type ? col.Type.toLowerCase() : "string",
       };
     });
 
     const rows = data.Rows;
 
-    const isDateColumn = colIndex => {
+    const isDateColumn = (colIndex) => {
       if (colIndex < 0 || colIndex >= columns.length) return false;
 
       const colName = columns[colIndex].name.toLowerCase();
       const colType = columns[colIndex].type;
 
       // Check type-based indicators
-      const typeIndicators = ['date', 'time', 'datetime', 'timestamp'];
-      if (typeIndicators.some(indicator => colType.includes(indicator))) {
+      const typeIndicators = ["date", "time", "datetime", "timestamp"];
+      if (typeIndicators.some((indicator) => colType.includes(indicator))) {
         return true;
       }
 
       // Check name-based indicators
       const nameIndicators = [
-        'date',
-        'year',
-        'month',
-        'day',
-        'period',
-        'yearmonth',
-        'financial_year',
+        "date",
+        "year",
+        "month",
+        "day",
+        "period",
+        "yearmonth",
+        "financial_year",
       ];
-      if (nameIndicators.some(indicator => colName.includes(indicator))) {
+      if (nameIndicators.some((indicator) => colName.includes(indicator))) {
         return true;
       }
 
@@ -1442,20 +1479,20 @@ setMatchSlugs(response.data.results);
       return false;
     };
 
-    const isNumericColumn = colIndex => {
+    const isNumericColumn = (colIndex) => {
       if (colIndex < 0 || colIndex >= columns.length) return false;
 
       const colType = columns[colIndex].type;
       const numericTypes = [
-        'number',
-        'int',
-        'integer',
-        'float',
-        'double',
-        'decimal',
-        'numeric',
+        "number",
+        "int",
+        "integer",
+        "float",
+        "double",
+        "decimal",
+        "numeric",
       ];
-      const isNumericType = numericTypes.some(type => colType.includes(type));
+      const isNumericType = numericTypes.some((type) => colType.includes(type));
 
       if (!isNumericType && rows.length > 0) {
         // Sample a few values to determine if they're numeric
@@ -1512,47 +1549,47 @@ setMatchSlugs(response.data.results);
       if (dateCols === 1 && valueCols === 1 && labelCols === 1) {
         const uniqueLabels = [
           ...new Set(
-            rows.map(row =>
+            rows.map((row) =>
               row && row[labelColIndices[0]] !== null
                 ? row[labelColIndices[0]]
-                : 'Unknown',
-            ),
+                : "Unknown"
+            )
           ),
         ];
         const uniqueDates = [
           ...new Set(
-            rows.map(row =>
-              row && row[dateColIndex] !== null ? row[dateColIndex] : 'Unknown',
-            ),
+            rows.map((row) =>
+              row && row[dateColIndex] !== null ? row[dateColIndex] : "Unknown"
+            )
           ),
         ];
 
         if (uniqueLabels.length > 1 && uniqueDates.length > 1) {
           return {
             shouldRenderChart: true,
-            type: 'multi_line',
+            type: "multi_line",
             dateColIndex,
             valueColIndices,
             labelColIndices,
-            reason: 'Time series with multiple categories (multi-line)',
+            reason: "Time series with multiple categories (multi-line)",
           };
         } else if (uniqueLabels.length > 1) {
           return {
             shouldRenderChart: true,
-            type: 'multi_bar',
+            type: "multi_bar",
             dateColIndex,
             valueColIndices,
             labelColIndices,
-            reason: 'Multiple categories over time (multi-bar)',
+            reason: "Multiple categories over time (multi-bar)",
           };
         } else {
           return {
             shouldRenderChart: true,
-            type: 'linechart',
+            type: "linechart",
             dateColIndex,
             valueColIndices,
             labelColIndices,
-            reason: 'Single time series',
+            reason: "Single time series",
           };
         }
       }
@@ -1561,18 +1598,18 @@ setMatchSlugs(response.data.results);
         if (valueCols === 1) {
           return {
             shouldRenderChart: true,
-            type: 'linechart',
+            type: "linechart",
             dateColIndex,
             valueColIndices,
-            reason: 'Time series with single value',
+            reason: "Time series with single value",
           };
         } else {
           return {
             shouldRenderChart: true,
-            type: 'multi_line',
+            type: "multi_line",
             dateColIndex,
             valueColIndices,
-            reason: 'Time series with multiple values (multi-line)',
+            reason: "Time series with multiple values (multi-line)",
           };
         }
       }
@@ -1581,11 +1618,11 @@ setMatchSlugs(response.data.results);
         const shouldUsePie = rows.length <= 8;
         return {
           shouldRenderChart: true,
-          type: shouldUsePie ? 'pie' : 'bar',
+          type: shouldUsePie ? "pie" : "bar",
           valueColIndices,
           labelColIndices,
           reason: `Multiple categories with single value (${
-            shouldUsePie ? 'pie' : 'bar'
+            shouldUsePie ? "pie" : "bar"
           })`,
         };
       }
@@ -1594,26 +1631,26 @@ setMatchSlugs(response.data.results);
         const shouldUsePie = rows.length <= 10;
         return {
           shouldRenderChart: true,
-          type: shouldUsePie ? 'pie' : 'bar',
+          type: shouldUsePie ? "pie" : "bar",
           valueColIndices,
           labelColIndices,
           reason: `Single category with single value (${
-            shouldUsePie ? 'pie' : 'bar'
+            shouldUsePie ? "pie" : "bar"
           })`,
         };
       }
 
       return {
         shouldRenderChart: false,
-        type: 'table',
+        type: "table",
         reason: `No matching chart conditions (dates: ${dateCols}, values: ${valueCols}, labels: ${labelCols})`,
       };
     } catch (error) {
-      console.error('Error in chart analysis logic:', error);
+      console.error("Error in chart analysis logic:", error);
       return {
         shouldRenderChart: false,
-        type: 'table',
-        reason: 'Error during chart analysis',
+        type: "table",
+        reason: "Error during chart analysis",
       };
     }
   };
@@ -1625,7 +1662,7 @@ setMatchSlugs(response.data.results);
     }
 
     if (!data || !data.Columns || !data.Rows) {
-      console.error('Invalid data structure in prepareChartData');
+      console.error("Invalid data structure in prepareChartData");
       return null;
     }
 
@@ -1642,26 +1679,26 @@ setMatchSlugs(response.data.results);
       return arr[index];
     };
 
-    const formatDate = dateValue => {
-      if (!dateValue) return '';
+    const formatDate = (dateValue) => {
+      if (!dateValue) return "";
 
       if (
-        typeof dateValue === 'string' &&
+        typeof dateValue === "string" &&
         dateValue.match(/^\d{4}(-\d{2})?$/)
       ) {
         return dateValue; // Handle "2021-22" format
       }
 
-      if (typeof dateValue === 'string' && dateValue.match(/^\d{4}-\d{4}$/)) {
+      if (typeof dateValue === "string" && dateValue.match(/^\d{4}-\d{4}$/)) {
         return dateValue; // Handle "2021-2022" format
       }
 
-      if (typeof dateValue === 'string' && dateValue.match(/^\d{4}$/)) {
+      if (typeof dateValue === "string" && dateValue.match(/^\d{4}$/)) {
         return dateValue;
       }
 
       if (
-        typeof dateValue === 'number' &&
+        typeof dateValue === "number" &&
         dateValue >= 1900 &&
         dateValue <= 2100
       ) {
@@ -1670,11 +1707,11 @@ setMatchSlugs(response.data.results);
 
       try {
         const date = new Date(dateValue);
-        if (date.toString() !== 'Invalid Date') {
-          return date.toISOString().split('T')[0];
+        if (date.toString() !== "Invalid Date") {
+          return date.toISOString().split("T")[0];
         }
       } catch (error) {
-        console.warn('Date parsing error:', error);
+        console.warn("Date parsing error:", error);
       }
 
       return String(dateValue);
@@ -1682,29 +1719,29 @@ setMatchSlugs(response.data.results);
 
     try {
       switch (type) {
-        case 'linechart':
+        case "linechart":
           if (
             dateColIndex !== -1 &&
             valueColIndices &&
             valueColIndices.length > 0
           ) {
-            const dates = rows.map(row =>
-              formatDate(safeArrayAccess(row, dateColIndex, '')),
+            const dates = rows.map((row) =>
+              formatDate(safeArrayAccess(row, dateColIndex, ""))
             );
-            const values = rows.map(row => {
+            const values = rows.map((row) => {
               const value = safeArrayAccess(row, valueColIndices[0], 0);
               return parseFloat(value) || 0;
             });
 
             return {
-              type: 'linechart',
+              type: "linechart",
               chartData: {
                 labels: dates,
                 datasets: [
                   {
                     name:
                       safeArrayAccess(columns, valueColIndices[0], {}).Name ||
-                      'Value',
+                      "Value",
                     data: values,
                   },
                 ],
@@ -1713,7 +1750,7 @@ setMatchSlugs(response.data.results);
           }
           break;
 
-        case 'multi_line':
+        case "multi_line":
           if (
             dateColIndex !== -1 &&
             valueColIndices &&
@@ -1721,22 +1758,22 @@ setMatchSlugs(response.data.results);
           ) {
             const dates = [
               ...new Set(
-                rows.map(row =>
-                  formatDate(safeArrayAccess(row, dateColIndex, '')),
-                ),
+                rows.map((row) =>
+                  formatDate(safeArrayAccess(row, dateColIndex, ""))
+                )
               ),
             ].sort();
 
             if (labelColIndices && labelColIndices.length > 0) {
               const seriesMap = new Map();
 
-              rows.forEach(row => {
+              rows.forEach((row) => {
                 if (!row || !Array.isArray(row)) return;
 
                 const seriesName = String(
-                  safeArrayAccess(row, labelColIndices[0], 'Unknown'),
+                  safeArrayAccess(row, labelColIndices[0], "Unknown")
                 );
-                const date = formatDate(safeArrayAccess(row, dateColIndex, ''));
+                const date = formatDate(safeArrayAccess(row, dateColIndex, ""));
                 const value =
                   parseFloat(safeArrayAccess(row, valueColIndices[0], 0)) || 0;
 
@@ -1750,12 +1787,12 @@ setMatchSlugs(response.data.results);
                 ([seriesName, dateValueMap]) => ({
                   name: seriesName,
                   label: seriesName,
-                  data: dates.map(date => dateValueMap.get(date) || 0),
-                }),
+                  data: dates.map((date) => dateValueMap.get(date) || 0),
+                })
               );
 
               return {
-                type: 'multi_line',
+                type: "multi_line",
                 chartData: {
                   labels: dates,
                   datasets: datasets,
@@ -1763,7 +1800,7 @@ setMatchSlugs(response.data.results);
               };
             } else {
               // Multiple value columns, single date column
-              const datasets = valueColIndices.map(colIndex => ({
+              const datasets = valueColIndices.map((colIndex) => ({
                 name:
                   safeArrayAccess(columns, colIndex, {}).Name ||
                   `Value ${colIndex}`,
@@ -1771,12 +1808,12 @@ setMatchSlugs(response.data.results);
                   safeArrayAccess(columns, colIndex, {}).Name ||
                   `Value ${colIndex}`,
                 data: rows.map(
-                  row => parseFloat(safeArrayAccess(row, colIndex, 0)) || 0,
+                  (row) => parseFloat(safeArrayAccess(row, colIndex, 0)) || 0
                 ),
               }));
 
               return {
-                type: 'multi_line',
+                type: "multi_line",
                 chartData: {
                   labels: dates,
                   datasets: datasets,
@@ -1786,7 +1823,7 @@ setMatchSlugs(response.data.results);
           }
           break;
 
-        case 'multi_bar':
+        case "multi_bar":
           if (
             dateColIndex !== -1 &&
             labelColIndices &&
@@ -1796,20 +1833,20 @@ setMatchSlugs(response.data.results);
           ) {
             const dates = [
               ...new Set(
-                rows.map(row =>
-                  formatDate(safeArrayAccess(row, dateColIndex, '')),
-                ),
+                rows.map((row) =>
+                  formatDate(safeArrayAccess(row, dateColIndex, ""))
+                )
               ),
             ].sort();
             const seriesMap = new Map();
 
-            rows.forEach(row => {
+            rows.forEach((row) => {
               if (!row || !Array.isArray(row)) return;
 
               const seriesName = String(
-                safeArrayAccess(row, labelColIndices[0], 'Unknown'),
+                safeArrayAccess(row, labelColIndices[0], "Unknown")
               );
-              const date = formatDate(safeArrayAccess(row, dateColIndex, ''));
+              const date = formatDate(safeArrayAccess(row, dateColIndex, ""));
               const value =
                 parseFloat(safeArrayAccess(row, valueColIndices[0], 0)) || 0;
 
@@ -1823,12 +1860,12 @@ setMatchSlugs(response.data.results);
               ([seriesName, dateValueMap]) => ({
                 name: seriesName,
                 label: seriesName,
-                data: dates.map(date => dateValueMap.get(date) || 0),
-              }),
+                data: dates.map((date) => dateValueMap.get(date) || 0),
+              })
             );
 
             return {
-              type: 'multi_bar',
+              type: "multi_bar",
               chartData: {
                 labels: dates,
                 datasets: datasets,
@@ -1837,7 +1874,7 @@ setMatchSlugs(response.data.results);
           }
           break;
 
-        case 'bar':
+        case "bar":
           if (
             labelColIndices &&
             labelColIndices.length > 0 &&
@@ -1845,49 +1882,49 @@ setMatchSlugs(response.data.results);
             valueColIndices.length > 0
           ) {
             if (labelColIndices.length === 1) {
-              const labels = rows.map(row =>
-                String(safeArrayAccess(row, labelColIndices[0], 'Unknown')),
+              const labels = rows.map((row) =>
+                String(safeArrayAccess(row, labelColIndices[0], "Unknown"))
               );
               const values = rows.map(
-                row =>
-                  parseFloat(safeArrayAccess(row, valueColIndices[0], 0)) || 0,
+                (row) =>
+                  parseFloat(safeArrayAccess(row, valueColIndices[0], 0)) || 0
               );
 
               return {
-                type: 'bar',
+                type: "bar",
                 chartData: {
                   labels: labels,
                   datasets: [
                     {
                       name:
                         safeArrayAccess(columns, valueColIndices[0], {}).Name ||
-                        'Value',
+                        "Value",
                       data: values,
                     },
                   ],
                 },
               };
             } else {
-              const combinedLabels = rows.map(row => {
-                const labelParts = labelColIndices.map(index =>
-                  String(safeArrayAccess(row, index, 'Unknown')),
+              const combinedLabels = rows.map((row) => {
+                const labelParts = labelColIndices.map((index) =>
+                  String(safeArrayAccess(row, index, "Unknown"))
                 );
-                return labelParts.join(' - ');
+                return labelParts.join(" - ");
               });
               const values = rows.map(
-                row =>
-                  parseFloat(safeArrayAccess(row, valueColIndices[0], 0)) || 0,
+                (row) =>
+                  parseFloat(safeArrayAccess(row, valueColIndices[0], 0)) || 0
               );
 
               return {
-                type: 'bar',
+                type: "bar",
                 chartData: {
                   labels: combinedLabels,
                   datasets: [
                     {
                       name:
                         safeArrayAccess(columns, valueColIndices[0], {}).Name ||
-                        'Value',
+                        "Value",
                       data: values,
                     },
                   ],
@@ -1897,23 +1934,23 @@ setMatchSlugs(response.data.results);
           }
           break;
 
-        case 'pie':
+        case "pie":
           if (
             labelColIndices &&
             labelColIndices.length > 0 &&
             valueColIndices &&
             valueColIndices.length > 0
           ) {
-            const pieLabels = rows.map(row =>
-              String(safeArrayAccess(row, labelColIndices[0], 'Unknown')),
+            const pieLabels = rows.map((row) =>
+              String(safeArrayAccess(row, labelColIndices[0], "Unknown"))
             );
             const pieValues = rows.map(
-              row =>
-                parseFloat(safeArrayAccess(row, valueColIndices[0], 0)) || 0,
+              (row) =>
+                parseFloat(safeArrayAccess(row, valueColIndices[0], 0)) || 0
             );
 
             return {
-              type: 'pie',
+              type: "pie",
               chartData: {
                 labels: pieLabels,
                 values: pieValues,
@@ -1927,33 +1964,29 @@ setMatchSlugs(response.data.results);
           return null;
       }
     } catch (error) {
-      console.error('Error in prepareChartData:', error);
+      console.error("Error in prepareChartData:", error);
       return null;
     }
 
     return null;
   };
 
-  const requestMicrophonePermission = async () => {
-    if (Platform.OS !== 'android') return true;
-    try {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-        {
-          title: 'Microphone Permission',
-          message:
-            'This app needs access to your microphone for speech recognition.',
-          buttonPositive: 'OK',
-        },
-      );
-      return granted === PermissionsAndroid.RESULTS.GRANTED;
-    } catch (err) {
-      console.warn(err);
-      return false;
-    }
-  };
+  // Check if mobile_string_replacement exists in api
+  let WORD_REPLACEMENTS = {};
 
-  const convertSpokenNumbersToDigits = text => {
+  try {
+    WORD_REPLACEMENTS = configworddata?.mobile_string_replacement
+      ? JSON.parse(
+          configworddata.mobile_string_replacement.replace(/;+$/, "").trim()
+        )
+      : {};
+  } catch (e) {
+    console.error("Error parsing mobile_string_replacement:", e);
+    WORD_REPLACEMENTS = {};
+  }
+
+  // Add this new function to convert spoken numbers to digits
+  const convertSpokenNumbersToDigits = (text) => {
     if (!text) return text;
 
     let result = text.toLowerCase();
@@ -1990,68 +2023,43 @@ setMatchSlugs(response.data.results);
       ninety: 90,
       hundred: 100,
       thousand: 1000,
-      lakh: 100000,
-      crore: 10000000,
     };
 
-    // Helper: convert sequence of words to number (supports "two thousand five hundred")
-    const wordsToNumber = words => {
-      let total = 0;
-      let current = 0;
+    // Handle "one hundred" → "100"
+    result = result.replace(/\b(\w+)\s+hundred\b/g, (match, num) => {
+      const n = numberWords[num] || 1;
+      return String(n * 100);
+    });
 
-      for (let word of words) {
-        const value = numberWords[word];
-        if (value === undefined) continue;
-
-        if (value < 100) {
-          current += value;
-        } else if (value === 100) {
-          if (current === 0) current = 1;
-          current *= value;
-        } else {
-          if (current === 0) current = 1;
-          current *= value;
-          total += current;
-          current = 0;
-        }
-      }
-
-      return total + current;
-    };
-
-    // Replace groups of number words with actual digits
+    // Handle "twenty three" → "23"
     result = result.replace(
-      /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|lakh|crore)(\s+(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|lakh|crore))*\b/g,
-      match => {
-        const words = match.trim().split(/\s+/);
-        return wordsToNumber(words);
-      },
+      /\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)\s+(one|two|three|four|five|six|seven|eight|nine)\b/g,
+      (match, tens, ones) => {
+        return String(numberWords[tens] + numberWords[ones]);
+      }
     );
+
+    // Replace individual number words
+    Object.keys(numberWords).forEach((word) => {
+      const regex = new RegExp(`\\b${word}\\b`, "g");
+      result = result.replace(regex, String(numberWords[word]));
+    });
 
     return result;
   };
 
-  const cleanText = text => {
-    if (!text) return text;
-    return text
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/gi, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  };
-
-  const replaceWords = text => {
+  const replaceWords = (text) => {
+    // First, convert spoken numbers to digits
     const textWithNumbers = convertSpokenNumbersToDigits(text);
+
     const cleaned = cleanText(textWithNumbers);
+    console.log("After cleanText:", cleaned);
 
-    const words = cleaned.split(' ');
+    const words = cleaned.split(" ");
 
-    const findVariantMatch = wordSequence => {
-      for (const [target, variants] of Object.entries(
-        configworddata.mobile_string_replacement,
-      )) {
-        // Add check to ensure variants is an array
-        if (Array.isArray(variants) && variants.includes(wordSequence)) {
+    const findVariantMatch = (wordSequence) => {
+      for (const [target, variants] of Object.entries(WORD_REPLACEMENTS)) {
+        if (variants.includes(wordSequence)) {
           return target;
         }
       }
@@ -2061,28 +2069,18 @@ setMatchSlugs(response.data.results);
     let result = [];
     let i = 0;
 
-    // Calculate max variant length with safety checks
-    let maxVariantLength = 1;
-    try {
-      const lengths = Object.values(configworddata.mobile_string_replacement)
-        .filter(variants => Array.isArray(variants)) // Filter only arrays
-        .map(variants =>
-          Math.max(...variants.map(v => String(v).split(' ').length)),
-        );
-
-      if (lengths.length > 0) {
-        maxVariantLength = Math.max(...lengths);
-      }
-    } catch (error) {
-      console.warn('Error calculating max variant length:', error);
-      maxVariantLength = 5; // Default fallback
-    }
-
     while (i < words.length) {
       let matched = false;
+
+      let maxVariantLength = Math.max(
+        ...Object.values(WORD_REPLACEMENTS).map((variants) =>
+          Math.max(...variants.map((v) => v.split(" ").length))
+        )
+      );
+
       for (let len = maxVariantLength; len >= 1; len--) {
         if (i + len <= words.length) {
-          const wordSequence = words.slice(i, i + len).join(' ');
+          const wordSequence = words.slice(i, i + len).join(" ");
           const target = findVariantMatch(wordSequence);
           if (target) {
             result.push(target);
@@ -2092,113 +2090,231 @@ setMatchSlugs(response.data.results);
           }
         }
       }
+
       if (!matched) {
         result.push(words[i]);
         i++;
       }
     }
 
-    return result.join(' ');
+    return result.join(" ");
   };
 
-  const replacePartialWords = (text, limit = 10) => {
-    const words = text.split(' ');
-    const lastWords = words.slice(-limit).join(' ');
-    return replaceWords(lastWords);
+  // Update cleanText to keep numbers
+  const cleanText = (text) => {
+    if (!text) return text;
+    return text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/gi, " ") // ✅ Keep numbers
+      .replace(/\s+/g, " ")
+      .trim();
   };
 
-  useEffect(() => {
-    VoiceToText.addEventListener(VoiceToTextEvents.START, () => {
-      setIsRecording(true);
-      setSttStatus('Listening...');
-      setPartialText('');
-    });
-
-    VoiceToText.addEventListener(VoiceToTextEvents.END, () => {
-      setIsRecording(false);
-      setSttStatus('Disconnected');
-      setPartialText('');
-    });
-
-    VoiceToText.addEventListener(VoiceToTextEvents.RESULTS, event => {
-      if (event && event.value) {
-        const replacedText = replaceWords(event.value);
-        setInputText(replacedText);
-      }
-      setSttStatus('Finalized');
-      setIsRecording(false);
-      setPartialText('');
-    });
-
-    VoiceToText.addEventListener(VoiceToTextEvents.PARTIAL_RESULTS, event => {
-      if (event && event.value) {
-        const replacedPartial = replacePartialWords(event.value, 10);
-        setPartialText(replacedPartial);
-      }
-      setSttStatus('Listening...');
-    });
-
-    VoiceToText.addEventListener(VoiceToTextEvents.ERROR, event => {
-      console.error('VoiceToText Error:', event);
-      setSttStatus('Error');
-      setIsRecording(false);
-      setPartialText('');
-    });
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      return () => {
-        VoiceToText.stopListening();
-        setIsRecording(false);
-        setSttStatus('Disconnected');
-      };
-    }, []),
-  );
-
-  const toggleRecording = async () => {
-    const hasPermission = await requestMicrophonePermission();
-    if (!hasPermission) {
-      setSttStatus('Mic permission denied');
-      return;
-    }
-
+  const requestMicrophonePermission = async () => {
+    if (Platform.OS !== "android") return true;
     try {
-      if (isRecording) {
-        await VoiceToText.stopListening();
-        setIsRecording(false);
-        setSttStatus('Disconnected');
-        if (partialText) {
-          setInputText(partialText);
-          setPartialText('');
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        {
+          title: "Microphone Permission",
+          message:
+            "This app needs access to your microphone for speech recognition.",
+          buttonPositive: "OK",
         }
-      } else {
-        await VoiceToText.stopListening().catch(() => {});
-        setInputText('');
-        setPartialText('');
-        setSttStatus('Listening...');
-        await VoiceToText.startListening();
-        setIsRecording(true);
-      }
-    } catch (error) {
-      console.log('VoiceToText error:', error);
-      setSttStatus('Error');
-      setIsRecording(false);
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    } catch (err) {
+      console.warn(err);
+      return false;
     }
   };
 
+  // // Clean stop function - simplified
+  // const cleanStop = async () => {
+  //   try {
+  //     await Voice.stop();
+  //     await Voice.cancel(); // Ensure clean state
+  //   } catch (error) {
+  //     console.log("Clean stop error (can ignore):", error);
+  //   }
+
+  //   // Reset states
+  //   setIsRecording(false);
+  //   setSttStatus("Disconnected");
+  // };
+
+  // const resetSilenceTimer = () => {
+  //   if (silenceTimer.current) clearTimeout(silenceTimer.current);
+  //   silenceTimer.current = setTimeout(() => {
+  //     console.log("⏳ No speech detected for 5s → auto-stopping mic...");
+  //     setIsRecording(false);
+  //     setSttStatus("Disconnected");
+  //     Voice.stop();
+  //   }, SILENCE_TIMEOUT);
+  // };
+
+  // const initializeVoice = async () => {
+  //   // When speech starts
+  //   Voice.onSpeechStart = () => {
+  //     console.log("🎤 Speech started");
+  //     setSttStatus("Listening...");
+  //     resetSilenceTimer(); // reset timer on start
+  //   };
+
+  //   // Handle partial results (real-time text)
+  //   Voice.onSpeechPartialResults = (e) => {
+  //     if (shouldIgnoreVoiceResults.current) return; // skip if message was just sent
+
+  //     const partialText = Array.isArray(e.value) ? e.value[0] : "";
+  //     const processedPartialText = replaceWords(partialText); // apply replacements
+
+  //     setPartialText(processedPartialText);
+  //     resetSilenceTimer(); // reset silence timer
+  //   };
+
+  //   // Handle final results
+  //   Voice.onSpeechResults = (e) => {
+  //     if (shouldIgnoreVoiceResults.current) return;
+
+  //     const finalText = Array.isArray(e.value) ? e.value[0] : "";
+  //     const processedText = replaceWords(finalText); // apply replacements
+
+  //     setInputText(processedText);
+  //     setPartialText("");
+  //     setSttStatus("Complete");
+
+  //     if (silenceTimer.current) clearTimeout(silenceTimer.current); // clear timer
+  //   };
+
+  //   // Handle errors
+  //   Voice.onSpeechError = (e) => {
+  //     console.log("❌ Speech error:", e);
+  //     setSttStatus("Error");
+  //     setIsRecording(false);
+  //     shouldIgnoreVoiceResults.current = false; // reset flag
+  //   };
+
+  //   // When speech ends
+  //   Voice.onSpeechEnd = () => {
+  //     console.log("✅ Speech ended");
+  //     setIsRecording(false);
+  //     setSttStatus("Disconnected");
+  //     shouldIgnoreVoiceResults.current = false; // reset flag
+  //   };
+  // };
+
+  // // Voice event listeners setup
   // useEffect(() => {
-  //   fetchCorrespondents();
+  //   initializeVoice();
+
+  //   return () => {
+  //     console.log("Cleaning up voice listeners");
+  //     cleanStop().then(() => {
+  //       Voice.destroy().then(() => {
+  //         Voice.removeAllListeners();
+  //       });
+  //     });
+  //   };
   // }, []);
 
+  // // Stop listening when leaving screen
+  // useFocusEffect(
+  //   useCallback(() => {
+  //     return () => {
+  //       console.log("Screen lost focus: stopping mic");
+  //       cleanStop();
+  //     };
+  //   }, [])
+  // );
+
+  // // Simplified toggle recording function - Manual control only
+  // const toggleRecording = async () => {
+  //   const hasPermission = await requestMicrophonePermission();
+  //   if (!hasPermission) {
+  //     setSttStatus("Mic permission denied");
+  //     return;
+  //   }
+
+  //   try {
+  //     if (isRecording) {
+  //       // Manual STOP
+  //       console.log("🔴 Manually stopping mic...");
+  //       await Voice.stop();
+  //       setIsRecording(false);
+  //       setSttStatus("Disconnected");
+  //     } else {
+  //       // Manual START
+  //       console.log("🎤 Manually starting mic...");
+
+  //       // Clean previous state
+  //       await Voice.stop().catch(() => {});
+  //       await Voice.cancel().catch(() => {});
+
+  //       // Clear text and start fresh
+  //       setInputText("");
+  //       setPartialText("");
+  //       setSttStatus("Starting...");
+
+  //       // Start listening
+  //       await Voice.start("en-IN");
+  //       setIsRecording(true);
+  //     }
+  //   } catch (error) {
+  //     console.error("Voice error:", error);
+  //     setSttStatus(`Error: ${error.message}`);
+  //     setIsRecording(false);
+  //   }
+  // };
+
+  // // useEffect(() => {
+  // //   fetchCorrespondents();
+  // // }, []);
+
+  // useEffect(() => {
+  //   if (!disableAutoScroll && flatListRef.current) {
+  //     flatListRef.current.scrollToEnd({ animated: true });
+  //   }
+  // }, [messages]);
+
+  // const speak = (text) => {
+  //   if (!text) return;
+  //   Speech.stop();
+  //   Speech.speak(text.replace(/<[^>]*>?/gm, ""), {
+  //     onStart: () => {
+  //       setIsSpeaking(true);
+  //       setIsPaused(false);
+  //     },
+  //     onDone: () => {
+  //       setIsSpeaking(false);
+  //       setIsPaused(false);
+  //     },
+  //   });
+  // };
+
+  // const pause = () => {
+  //   Speech.pause();
+  //   setIsPaused(true);
+  // };
+
+  // const resume = () => {
+  //   Speech.resume();
+  //   setIsPaused(false);
+  // };
+
+  // const stop = () => {
+  //   Speech.stop();
+  //   setIsSpeaking(false);
+  //   setIsPaused(false);
+  // };
+
   const toggleFilterInput = (tableKey, columnName) => {
-    setActiveFilterColumnsByTable(prev => {
+    setActiveFilterColumnsByTable((prev) => {
       const prevForTable = prev[tableKey] || [];
       let updatedForTable;
 
       if (prevForTable.includes(columnName)) {
-        updatedForTable = prevForTable.filter(col => col !== columnName);
-        setFiltersByTable(filters => {
+        updatedForTable = prevForTable.filter((col) => col !== columnName);
+        setFiltersByTable((filters) => {
           const updated = { ...filters };
           if (updated[tableKey]) {
             const tableFilters = { ...updated[tableKey] };
@@ -2216,39 +2332,40 @@ setMatchSlugs(response.data.results);
   };
 
   const handleFilterChange = (tableKey, columnName, value, onPageChange) => {
-    setFiltersByTable(prev => ({
+    setFiltersByTable((prev) => ({
       ...prev,
       [tableKey]: {
         ...(prev[tableKey] || {}),
         [columnName]: value,
       },
     }));
+
     if (onPageChange) onPageChange(1);
   };
 
   const applyFilters = (rows = [], columns = [], tableKey) => {
     const tableFilters = filtersByTable[tableKey] || {};
 
-    return rows.filter(row =>
+    return rows.filter((row) =>
       columns.every((col, colIndex) => {
-        const rawFilterValue = tableFilters[col.Name] || '';
+        const rawFilterValue = tableFilters[col.Name] || "";
         if (!rawFilterValue) return true;
 
-        const filterValue = rawFilterValue.replace(/[.,\s]/g, '').toLowerCase();
+        const filterValue = rawFilterValue.replace(/[.,\s]/g, "").toLowerCase();
         const cellRaw = row[colIndex];
-        const cellValue = String(cellRaw || '')
-          .replace(/[.,\s]/g, '')
+        const cellValue = String(cellRaw || "")
+          .replace(/[.,\s]/g, "")
           .toLowerCase();
 
         return cellValue.includes(filterValue);
-      }),
+      })
     );
   };
 
   const handleUserMessageDoubleTap = (sender, rawHtml, setInputText) => {
     const now = Date.now();
     if (lastTapRef.current && now - lastTapRef.current < 300) {
-      if (sender === 'user') {
+      if (sender === "user") {
         const cleanText = getReadableTextFromHtml(rawHtml);
         setInputText(cleanText);
       }
@@ -2257,7 +2374,7 @@ setMatchSlugs(response.data.results);
   };
 
   const handleMessageSingleTap = (sender, rawHtml, setInputText) => {
-    if (sender !== 'user') {
+    if (sender !== "user") {
       const cleanText = getReadableTextFromHtml(rawHtml);
       setInputText(cleanText);
     }
@@ -2267,16 +2384,19 @@ setMatchSlugs(response.data.results);
     lastTapRef,
     messages,
     inputText,
+    loadingDots,
+    isGenerating,
+    periodTextsByTable,
     setInputText,
     filteredSlugs,
     currentPage,
-    periodTextsByTable,
     setCurrentPage,
     currentActiveSlug,
     refreshing,
     isRecording,
     sttStatus,
     partialText,
+    volume,
     wsRef,
     pulseAnim,
     flatListRef,
@@ -2286,22 +2406,24 @@ setMatchSlugs(response.data.results);
     filtersByTable,
     activeFilterColumnsByTable,
     selectedKeyItems,
-    loadingDots,
-    isGenerating,
-    formatCellValue,
     setSelectedKeyItems,
     handleUserMessageDoubleTap,
     handleMessageSingleTap,
     toggleFilterInput,
     handleFilterChange,
+    fetchCorrespondents,
     applyFilters,
+    // speak,
+    // pause,
+    // resume,
+    // stop,
     setPaginationState,
     handleRefresh,
-    toggleRecording,
+    // toggleRecording,
     sendMessage,
     handleSlugPress,
-    fetchCorrespondents,
-    renderPaginationControls: totalItems => {
+    formatCellValue,
+    renderPaginationControls: (totalItems) => {
       const totalPages = Math.ceil(totalItems / itemsPerPage);
       return { totalPages, itemsPerPage };
     },
@@ -2310,25 +2432,24 @@ setMatchSlugs(response.data.results);
     isOnlyTotalNonEmpty,
     analyzeDataForChart,
     prepareChartData,
-    formatCellValue,
-    formatDate: dateValue => {
-      if (!dateValue) return '';
+    formatDate: (dateValue) => {
+      if (!dateValue) return "";
       if (
-        typeof dateValue === 'string' &&
+        typeof dateValue === "string" &&
         dateValue.match(/^\d{4}-\d{2}-\d{2}$/)
       )
         return dateValue;
-      if (typeof dateValue === 'string' && dateValue.match(/^\d{4}$/))
+      if (typeof dateValue === "string" && dateValue.match(/^\d{4}$/))
         return dateValue;
       if (
-        typeof dateValue === 'number' &&
+        typeof dateValue === "number" &&
         dateValue >= 1900 &&
         dateValue <= 2100
       )
         return dateValue.toString();
       const date = new Date(dateValue);
-      if (date.toString() !== 'Invalid Date')
-        return date.toISOString().split('T')[0];
+      if (date.toString() !== "Invalid Date")
+        return date.toISOString().split("T")[0];
       return String(dateValue);
     },
     renderChart: (chartAnalysis, data) => {
@@ -2339,4 +2460,4 @@ setMatchSlugs(response.data.results);
   };
 };
 
-export default UseBotScreenHooks;
+export default useBotScreenHooks;

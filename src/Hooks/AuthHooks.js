@@ -13,8 +13,8 @@ const AuthHooks = () => {
     const navigation = useNavigation();
     const dispatch = useDispatch();
     
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
+    const [username, setUsername] = useState('manish');
+    const [password, setPassword] = useState('manish');
     const [errors, setErrors] = useState({});
     const [loading, setLoading] = useState(false);
     const [otpAttempts, setOtpAttempts] = useState(0);
@@ -170,7 +170,6 @@ const AuthHooks = () => {
         };
 
         setLoading(true);
-
         try {
             const response = await fetch(endpoint.login(), {
                 method: 'POST',
@@ -227,11 +226,11 @@ const AuthHooks = () => {
                 
                 const config = await fetchConfig();                
                 const botLevel = Number(config?.[0]?.bot_level);                                
-                let destination = 'BotCategory';
+                let destination = 'HomeScreen';
                 if (botLevel === 1) {
-                    destination = 'BotCategory';
+                    destination = 'HomeScreen';
                 } else if (botLevel !== 1) {
-                    destination = 'DataScreen';
+                    destination = 'HomeScreen';
                 }
                 navigation.navigate(destination);
                 return { success: true, mfaRequired: false };   
@@ -326,11 +325,11 @@ const AuthHooks = () => {
                 
                 const config = await fetchConfig();                
                 const botLevel = Number(config?.[0]?.bot_level);                                
-                let destination = 'BotCategory';
+                let destination = 'HomeScreen';
                 if (botLevel === 1) {
-                    destination = 'BotCategory';
+                    destination = 'HomeScreen';
                 } else if (botLevel !== 1) {
-                    destination = 'DataScreen';
+                    destination = 'HomeScreen';
                 }
                 navigation.navigate(destination);
                 return { success: true };

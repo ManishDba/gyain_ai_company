@@ -1,0 +1,356 @@
+export function extractPeriod(inputText) {
+  if (!inputText || typeof inputText !== "string") return [];
+
+  const currentYear = new Date().getFullYear();
+  const results = [];
+  let foundDate = false;
+
+  // ---------------- MULTI KEYWORDS ADDED ----------------
+  const currentYearKeywords = [
+    "current year",
+    "current yr",
+    "current financial year",
+    "current fy",
+    "present year",
+    "present yr",
+    "running year",
+    "ongoing year",
+    "this year",
+    "this yr",
+    "financial year",
+    "fin year",
+    "fin yr"
+  ];
+
+  const lastYearKeywords = [
+    "last year",
+    "last yr",
+    "previous year",
+    "previous yr",
+    "prev year",
+    "prev yr",
+    "prior year"
+  ];
+
+  const thisMonthKeywords = [
+    "this month",
+    "current month",
+    "present month"
+  ];
+
+  const currentYearRegex = new RegExp(`\\b(${currentYearKeywords.join("|")})\\b`, "i");
+  const lastYearRegex = new RegExp(`\\b(${lastYearKeywords.join("|")})\\b`, "i");
+  const thisMonthRegex = new RegExp(`\\b(${thisMonthKeywords.join("|")})\\b`, "i");
+  // --------------------------------------------------------
+
+  const monthMap = {
+    jan: 0, january: 0,
+    feb: 1, february: 1,
+    mar: 2, march: 2,
+    apr: 3, april: 3,
+    may: 4,
+    jun: 5, june: 5,
+    jul: 6, july: 6,
+    aug: 7, august: 7,
+    sep: 8, sept: 8, september: 8,
+    oct: 9, october: 9,
+    nov: 10, november: 10,
+    dec: 11, december: 11,
+  };
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  const addUnique = (value) => {
+    if (!results.includes(value)) results.push(value);
+  };
+
+  const formatFullDate = (d) =>
+    d.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+
+  const formatMonthYear = (date) => {
+    return date.toLocaleString("en-US", { month: "long", year: "numeric" });
+  };
+
+  // SPECIAL KEYWORDS - Check these first
+  if (/\b(all years?|year wise)\b/i.test(inputText)) {
+    return [];
+  }
+
+  // ---------------- THIS MONTH HANDLING ----------------
+  if (thisMonthRegex.test(inputText)) {
+    const today = new Date();
+    addUnique(`${monthNames[today.getMonth()]} ${today.getFullYear()}`);
+    foundDate = true;
+  }
+  // --------------------------------------------------------
+
+  // ---------------- CURRENT YEAR HANDLING ----------------
+  if (!foundDate && currentYearRegex.test(inputText)) {
+    const today = new Date();
+    const currentFYStart = new Date(today.getFullYear(), 3, 1);
+
+    addUnique(`${formatMonthYear(currentFYStart)} to ${formatMonthYear(today)}`);
+    foundDate = true;
+  }
+  // --------------------------------------------------------
+
+  // ---------------- LAST YEAR HANDLING (ONLY MONTHS) ----------------
+  if (!foundDate && lastYearRegex.test(inputText)) {
+    const lastYearStart = new Date(currentYear - 1, 3, 1); // April
+    const lastYearEnd = new Date(currentYear, 2, 31); // March
+
+    addUnique(`${formatMonthYear(lastYearStart)} to ${formatMonthYear(lastYearEnd)}`);
+    foundDate = true;
+  }
+  // --------------------------------------------------------
+
+  // 1️⃣ FINANCIAL YEAR: "FY 2024 | 2025", "2024,2025", "FY 2023-2024", "2023-24"
+  if (!foundDate) {
+    // Handle pipe separator (2024 | 2025) or comma separator (2024,2025)
+    const fyPipeRegex = /\b(?:FY|Fin(?:ancial)?\s?Year\s*)?(\d{4})\s*[|,]\s*(\d{4})\b/gi;
+    const fyPipeMatch = inputText.match(fyPipeRegex);
+    if (fyPipeMatch) {
+      for (const fy of fyPipeMatch) {
+        const match = fy.match(/(\d{4})\s*[|,]\s*(\d{4})/);
+        if (match) {
+          addUnique(`${match[1]}-${match[2]}`);
+          foundDate = true;
+        }
+      }
+    }
+
+    if (!foundDate) {
+      const financialYearRegex = /\b(?:FY|Fin(?:ancial)?\s?Year\s*)?(\d{4})[-\/–](\d{2,4})\b/gi;
+      const financialYearMatches = inputText.match(financialYearRegex) || [];
+      for (const fy of financialYearMatches) {
+        const match = fy.match(/(\d{4})[-\/–](\d{2,4})/);
+        if (match) {
+          const s = +match[1];
+          const e = match[2].length === 2 ? +(match[1].slice(0, 2) + match[2]) : +match[2];
+          addUnique(`${s}-${e}`);
+          foundDate = true;
+        }
+      }
+    }
+  }
+
+  // 2️⃣ DATE RANGE (WITH DATES) OR MONTH RANGE (WITHOUT DATES)
+  if (!foundDate) {
+    const hasMultipleRanges = /\s+(?:and|&)\s+/i.test(inputText);
+
+    if (hasMultipleRanges) {
+      const segments = inputText.split(/\s+(?:and|&)\s+/i);
+
+      for (const segment of segments) {
+        const fullRangeRegex =
+          /(\d{1,2})?\s*(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(?:(\d{4})\s+)?to\s+(\d{1,2})?\s*(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s*(\d{4})?/i;
+
+        const rangeMatch = segment.match(fullRangeRegex);
+        if (rangeMatch) {
+          const [, d1, m1, y1, d2, m2, y2] = rangeMatch;
+          const year1 = y1 || y2 || currentYear;
+          const year2 = y2 || currentYear;
+
+          // Check if dates are provided
+          if (d1 && d2) {
+            const month1 = monthMap[m1.toLowerCase()];
+            const month2 = monthMap[m2.toLowerCase()];
+            const startDate = new Date(parseInt(year1), month1, parseInt(d1));
+            const endDate = new Date(parseInt(year2), month2, parseInt(d2));
+            addUnique(`${formatFullDate(startDate)} to ${formatFullDate(endDate)}`);
+          } else {
+            // Only months, no dates
+            const m1Short = m1.slice(0, 3);
+            const m2Short = m2.slice(0, 3);
+            addUnique(
+              `${m1Short.charAt(0).toUpperCase() + m1Short.slice(1).toLowerCase()} ${year1} to ` +
+              `${m2Short.charAt(0).toUpperCase() + m2Short.slice(1).toLowerCase()} ${year2}`
+            );
+          }
+          foundDate = true;
+        }
+      }
+    } else {
+      const fullRangeRegex =
+        /(\d{1,2})?\s*(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(?:(\d{4})\s+)?to\s+(\d{1,2})?\s*(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s*(\d{4})?/i;
+
+      const rangeMatch = inputText.match(fullRangeRegex);
+      if (rangeMatch) {
+        const [, d1, m1, y1, d2, m2, y2] = rangeMatch;
+        const year1 = y1 || y2 || currentYear;
+        const year2 = y2 || currentYear;
+
+        // Check if dates are provided
+        if (d1 && d2) {
+          const month1 = monthMap[m1.toLowerCase()];
+          const month2 = monthMap[m2.toLowerCase()];
+          const startDate = new Date(parseInt(year1), month1, parseInt(d1));
+          const endDate = new Date(parseInt(year2), month2, parseInt(d2));
+          addUnique(`${formatFullDate(startDate)} to ${formatFullDate(endDate)}`);
+        } else {
+          // Only months, no dates
+          const m1Short = m1.slice(0, 3);
+          const m2Short = m2.slice(0, 3);
+          addUnique(
+            `${m1Short.charAt(0).toUpperCase() + m1Short.slice(1).toLowerCase()} ${year1} to ` +
+            `${m2Short.charAt(0).toUpperCase() + m2Short.slice(1).toLowerCase()} ${year2}`
+          );
+        }
+        foundDate = true;
+      }
+    }
+  }
+
+  // 3️⃣ FULL DATE
+  if (!foundDate) {
+    const dayMonthYearRegex =
+      /\b(\d{1,2})[-\s](Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[-\s](\d{4})\b/gi;
+
+    const dayMonthYearMatches = inputText.match(dayMonthYearRegex) || [];
+    for (const match of dayMonthYearMatches) {
+      const parts = match.match(
+        /(\d{1,2})[-\s](Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[-\s](\d{4})/i
+      );
+      if (parts) {
+        const [, day, monthStr, yearStr] = parts;
+        const monthIndex = monthMap[monthStr.toLowerCase()];
+        const d = new Date(parseInt(yearStr), monthIndex, parseInt(day));
+        if (!isNaN(d)) {
+          addUnique(formatFullDate(d));
+          foundDate = true;
+        }
+      }
+    }
+  }
+
+  // 4️⃣ NUMERIC DATE
+  if (!foundDate) {
+    const numericDateRegex =
+      /\b\d{1,2}[-\/.\s]\d{1,2}[-\/.\s]\d{2,4}\b|\b\d{4}[-\/.\s]\d{1,2}[-\/.\s]\d{1,2}\b/g;
+
+    const numericMatches = inputText.match(numericDateRegex) || [];
+    for (const numeric of numericMatches) {
+      const parts = numeric.split(/[-\/.\s]/);
+      if (parts.length === 3) {
+        let day, month, year;
+        if (parts[0].length === 4) {
+          year = +parts[0];
+          month = +parts[1] - 1;
+          day = +parts[2];
+        } else {
+          day = +parts[0];
+          month = +parts[1] - 1;
+          year = +parts[2] < 100 ? (+parts[2] < 50 ? 2000 + +parts[2] : 1900 + +parts[2]) : +parts[2];
+        }
+        const d = new Date(year, month, day);
+        if (!isNaN(d)) {
+          addUnique(formatFullDate(d));
+          foundDate = true;
+        }
+      }
+    }
+  }
+
+  // 5️⃣ MONTH + YEAR
+  if (!foundDate) {
+    const monthYearRegex =
+      /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[\s\-_/.,]*(\d{4})\b/gi;
+
+    const monthYearMatches = inputText.match(monthYearRegex) || [];
+    if (monthYearMatches.length > 0) {
+      for (const m of monthYearMatches) {
+        const match = m.match(
+          /(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[\s\-_/.,]*(\d{4})/i
+        );
+        if (match) {
+          const [, monthName, year] = match;
+          const shortMonth = monthName.slice(0, 3);
+          addUnique(
+            `${shortMonth.charAt(0).toUpperCase() + shortMonth.slice(1).toLowerCase()} ${year}`
+          );
+          foundDate = true;
+        }
+      }
+    }
+  }
+
+  // 6️⃣ ONLY MONTH NAME (without year) - Only if no range found
+  if (!foundDate) {
+    const monthOnlyRegex =
+      /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b/i;
+
+    const monthOnlyMatch = inputText.match(monthOnlyRegex);
+    if (monthOnlyMatch) {
+      const monthName = monthOnlyMatch[1];
+      
+      // Get full month name
+      const monthIndex = monthMap[monthName.toLowerCase()];
+      const fullMonthName = monthNames[monthIndex];
+      
+      addUnique(fullMonthName);
+      foundDate = true;
+    }
+  }
+
+  // 7️⃣ ONLY YEAR
+  if (!foundDate) {
+    const yearOnlyRegex = /\b(20\d{2}|19\d{2})\b/;
+    const yearMatch = inputText.match(yearOnlyRegex);
+    if (yearMatch) {
+      addUnique(yearMatch[1]);
+      foundDate = true;
+    }
+  }
+
+  // Return with "Period : "
+  const separator =
+    results.length > 1 && /\s+(?:and|&|vs\.?|versus)\s+/i.test(inputText)
+      ? ", "
+      : " to ";
+
+  return results.length > 0 ? [`Period : ${results.join(separator)}`] : [];
+}
+
+// // Test examples
+// console.log(extractPeriod("compare sales of nano urea plus in Apr to Nov 2024 and apr to nov 2025"));
+// // Output: ["Period : Apr 2024 to Nov 2024, Apr 2025 to Nov 2025"]
+
+// console.log(extractPeriod("april to november sales"));
+// // Output: ["Period : Apr 2025 to Nov 2025"]
+
+// console.log(extractPeriod("2024,2025"));
+// // Output: ["Period : 2024-2025"]
+
+// console.log(extractPeriod("2024 | 2025"));
+// // Output: ["Period : 2024-2025"]
+
+// console.log(extractPeriod("previous yr"));
+// // Output: ["Period : April 2024 to March 2025"]
+
+// console.log(extractPeriod("last year"));
+// // Output: ["Period : April 2024 to March 2025"]
+
+// console.log(extractPeriod("this month"));
+// // Output: ["Period : November 2025"]
+
+// console.log(extractPeriod("sales from 5 may to 5 June 2024"));
+// // Output: ["Period : 05 May 2024 to 05 Jun 2024"]
+
+// console.log(extractPeriod("FY 2024 | 2025"));
+// // Output: ["Period : 2024-2025"]
+
+// console.log(extractPeriod("all years"));
+// // Output: []
+
+// console.log(extractPeriod("1 nov 2025"));
+// // Output: ["Period : 01 Nov 2025"]
+
+// console.log(extractPeriod("current year"));
+// // Output: ["Period : April 2025 to November 2025"]

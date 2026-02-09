@@ -28,6 +28,8 @@ axiosInstance.interceptors.request.use(
       config.headers["Authorization"] = `Token ${token}`;
       await AsyncStorage.setItem("auth_token", token);
     }
+    console.log("API Request →", config.method?.toUpperCase(), config.baseURL + config.url);
+    console.log("Payload →", config.data || config.params);
 
     return config;
   },

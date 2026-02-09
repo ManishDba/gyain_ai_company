@@ -42,7 +42,7 @@ const SplashScreen = ({ navigation }) => {
           dispatch(restoreAuthState({ token }));
           const config = await fetchConfig();
           const botLevel = Number(config?.[0]?.bot_level);
-          const destination = botLevel === 1 ? "BotCategory" : "DataScreen";
+          const destination = botLevel === 1 ? "HomeScreen" : "HomeScreen";
           navigation.dispatch(
             CommonActions.reset({
               index: 0,
