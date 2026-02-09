@@ -16,8 +16,17 @@ let activeRequests = 0;
 axiosInstance.interceptors.request.use(
   async (config) => {
     activeRequests += 1;
+    console.log("📤 REQUEST START:", {
+      url: config.url,
+      method: config.method?.toUpperCase(),
+      activeRequests: activeRequests,
+      baseURL: config.baseURL,
+      params: config.params,
+      data: config.data,
+    });
+
     if (activeRequests === 1) {
-      // Start loader only when the first request begins
+      console.log("🔄 Starting loader...");
       store.dispatch(startLoaderAct());
     }
 
@@ -27,13 +36,21 @@ axiosInstance.interceptors.request.use(
     if (token) {
       config.headers["Authorization"] = `Token ${token}`;
       await AsyncStorage.setItem("auth_token", token);
+      console.log("🔑 Token attached to request");
+    } else {
+      console.log("⚠️ No token found");
     }
 
     return config;
   },
   (error) => {
     activeRequests = Math.max(activeRequests - 1, 0);
+    console.log("❌ REQUEST ERROR:", {
+      error: error.message,
+      activeRequests: activeRequests,
+    });
     if (activeRequests === 0) {
+      console.log("⏹️ Stopping loader (request error)");
       store.dispatch(stopLoaderAct());
     }
     return Promise.reject(error);
@@ -44,15 +61,33 @@ axiosInstance.interceptors.request.use(
 axiosInstance.interceptors.response.use(
   (response) => {
     activeRequests = Math.max(activeRequests - 1, 0);
+    console.log("✅ RESPONSE SUCCESS:", {
+      url: response.config.url,
+      status: response.status,
+      statusText: response.statusText,
+      activeRequests: activeRequests,
+      data: response.data,
+    });
+
     if (activeRequests === 0) {
-      // Stop loader only when all requests have finished
+      console.log("⏹️ Stopping loader (all requests complete)");
       store.dispatch(stopLoaderAct());
     }
     return response;
   },
   (error) => {
     activeRequests = Math.max(activeRequests - 1, 0);
+    console.log("❌ RESPONSE ERROR:", {
+      url: error.config?.url,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      message: error.message,
+      activeRequests: activeRequests,
+      errorData: error.response?.data,
+    });
+
     if (activeRequests === 0) {
+      console.log("⏹️ Stopping loader (response error)");
       store.dispatch(stopLoaderAct());
     }
     return Promise.reject(error);

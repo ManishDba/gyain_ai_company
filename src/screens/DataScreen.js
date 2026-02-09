@@ -30,7 +30,6 @@ import CustomHtmlTable from '../components/tablehtml';
 import DynamicChart from '../components/botchart/DynamicChart';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSelector } from 'react-redux';
-import { useNavigation } from '@react-navigation/native';
 import MediaSection from '../components/MediaSection';
 import { ENV } from '../../env';
 import RNFS from 'react-native-fs';
@@ -190,7 +189,7 @@ const FullScreenZoomableContainer = ({ children }) => {
   );
 };
 
-const DataScreen = ({ route }) => {
+const DataScreen = ({ route, navigation }) => {
   const {
     messages,
     inputText,
@@ -235,8 +234,7 @@ const DataScreen = ({ route }) => {
     formatCellValue,
     loadingDots,
     fetchCorrespondents
-  } = UseBotScreenHooks({ route });
-  const navigation = useNavigation();
+  } = UseBotScreenHooks({ route,navigation });
 
   const categoryId = route?.params?.Cat_name;
 

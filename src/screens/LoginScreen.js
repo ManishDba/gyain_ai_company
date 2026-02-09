@@ -635,10 +635,11 @@ const styles = StyleSheet.create({
     color: "#3B82F6",
     fontWeight: "500",
   },
-  headerImage: {
-  width: 125,
-  height: 100,
-  alignSelf: 'center',
+headerImage: {
+  width: 120,
+  height: 120,        
+  borderRadius: 60,   
+  alignSelf: "center",
 },
 });
 

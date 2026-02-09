@@ -3,10 +3,13 @@ import { Provider, useSelector } from "react-redux";
 import { NavigationContainer } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 
-// ✅ Only the imports you requested
+// ✅ All imports
 import LoginScreen from "./src/screens/LoginScreen";
 import DataScreen from "./src/screens/DataScreen";
 import ProfileScreen from "./src/screens/ProfileScreen";
+import HomeScreen from "./src/screens/HomeScreen";
+import DashboardScreen from "./src/screens/DashboardScreen";
+import DashboardDetailScreen from "./src/screens/DashboardDetails";
 import MainLayout from "./src/components/MainLayout";
 import HeaderOnlyLayout from "./src/components/HeaderOnlyLayout";
 import store from "./src/store";
@@ -16,13 +19,15 @@ import SplashScreen from "./src/screens/SplashScreen";
 import PdfViewerScreen from "./src/components/PdfViewerScreen";
 import { NativeModules } from "react-native";
 import ExcelScreen from "./src/screens/ExcelScreen";
-// console.log("Loaded native modules:", Object.keys(NativeModules));
 
 const Stack = createStackNavigator();
 
 const screens = [
   { name: "DataScreen", component: DataScreen },
   { name: "BotCategory", component: BotCategory },
+  { name: "HomeScreen", component: HomeScreen },
+  { name: "DashboardScreen", component: DashboardScreen },
+  { name: "DashboardDetailScreen", component: DashboardDetailScreen },
 ];
 
 const AppContent = () => {
@@ -40,20 +45,20 @@ const AppContent = () => {
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="ExcelScreen" component={ExcelScreen} />
 
-          {screens.map(({ name, component }) => (
+          {screens.map(({ name, component: Component }) => (
             <Stack.Screen key={name} name={name}>
-              {({ route }) => (
+              {({ route, navigation }) => (
                 <MainLayout route={route}>
-                  {React.createElement(component, { route })}
+                  <Component route={route} navigation={navigation} />
                 </MainLayout>
               )}
             </Stack.Screen>
           ))}
 
           <Stack.Screen name="Profile">
-            {() => (
+            {({ route, navigation }) => (
               <HeaderOnlyLayout>
-                <ProfileScreen />
+                <ProfileScreen route={route} navigation={navigation} />
               </HeaderOnlyLayout>
             )}
           </Stack.Screen>

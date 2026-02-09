@@ -29,7 +29,7 @@ const MainLayout = ({ children, onRefresh }) => {
             children
           )}
         </View>
-        {/* <Footer /> */}
+        <Footer />
       </View>
     </View>
   );

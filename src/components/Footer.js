@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, InteractionManager } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, CommonActions } from '@react-navigation/native';
 import Icons from '../../env/icons';
 import { useSelector } from "react-redux";
 
@@ -15,7 +15,17 @@ const Footer = () => {
         const state = navigation.getState();
         if (state && state.routes && state.index >= 0) {
           const currentRouteName = state.routes[state.index].name;
-          setActiveButton(currentRouteName);
+          
+          // Map screen names to footer button names
+          const screenMapping = {
+            'HomeScreen': 'HomeScreen',
+            'DashboardScreen': 'DashboardScreen',
+            'BotCategory': 'BotCategory',
+            'DataScreen': 'BotCategory', // DataScreen should highlight BotCategory
+            'DashboardDetailScreen': 'DashboardScreen', // Detail screen highlights Dashboard
+          };
+          
+          setActiveButton(screenMapping[currentRouteName] || currentRouteName);
         }
       } catch (error) {
         console.log("Navigation state error:", error);
@@ -23,25 +33,32 @@ const Footer = () => {
     }, [navigation])
   );
 
-const handlePress = (navigateTo) => {
-  let destination = navigateTo;
+  // ✅ UPDATED handlePress function
+  const handlePress = (navigateTo) => {
+    let destination = navigateTo;
 
-  if (navigateTo === 'BotCategory') {
-    const botLevel = configData[0]?.bot_level;
-    if (botLevel === 1) {
-      destination = 'DataScreen';
-    } else if (botLevel === 2) {
-      destination = 'BotCategory';
+    if (navigateTo === 'BotCategory') {
+      const botLevel = configData[0]?.bot_level;
+      if (botLevel === 1) {
+        destination = 'DataScreen';
+      } else if (botLevel === 2) {
+        destination = 'BotCategory';
+      }
     }
-  }
 
-  setActiveButton(destination);
-  InteractionManager.runAfterInteractions(() => {
-    if (destination !== activeButton) {
-      navigation.navigate(destination);
-    }
-  });
-};
+    setActiveButton(destination);
+    
+    InteractionManager.runAfterInteractions(() => {
+      if (destination !== activeButton) {
+        // ✅ Use dispatch with NAVIGATE action directly
+        navigation.dispatch(
+          CommonActions.navigate({
+            name: destination,
+          })
+        );
+      }
+    });
+  };
 
   const FooterButton = ({ title, iconName, navigateTo }) => {
     const isActive = activeButton === navigateTo 
@@ -68,11 +85,7 @@ const handlePress = (navigateTo) => {
       <View style={styles.buttonContainer}>
         <FooterButton title="Home" iconName={Icons.Icon15} navigateTo="HomeScreen" />
         <FooterButton title="Bot" iconName={Icons.Icon14} navigateTo="BotCategory" />
-        <FooterButton title="Documents" iconName={Icons.Icon16} navigateTo="DocumentCategory" />
-        <FooterButton title="Data Sets" iconName={Icons.Icon20} navigateTo="DataSetCategory" />
         <FooterButton title="Dashboard" iconName={Icons.Icon17} navigateTo="DashboardScreen" />
-        <FooterButton title="Saved Query" iconName={Icons.Icon18} navigateTo="IndicatorScreen" />
-        <FooterButton title="Bulk Search" iconName={Icons.Icon21} navigateTo="BulkSearchScreen" />
       </View>
     </View>
   );
@@ -80,11 +93,10 @@ const handlePress = (navigateTo) => {
 
 const styles = StyleSheet.create({
   footer: {
-    position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 70,
+    height: 75,
     backgroundColor: '#174054',
     justifyContent: 'center',
     alignItems: 'center',
@@ -92,13 +104,12 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     borderTopColor: '#ffffff',
     elevation: 4,
-    paddingTop: 11
   },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: "space-between",
     alignItems: 'center',
-    width: '100%',
+    width: '70%',
     paddingHorizontal: 10,
     padding: 12
   },
@@ -119,7 +130,7 @@ const styles = StyleSheet.create({
   },
   activeText: {
     fontWeight: 'bold',
-    color: '#ffcc00', // Highlight active button text
+    color: '#ffcc00',
   },
   iconContainer: {
     justifyContent: 'center',
