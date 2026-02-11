@@ -61,13 +61,13 @@ const isHomeScreen =
 
         <Appbar.Content title="" />
 
-        <View style={styles.rightContainer}>
+        {/* <View style={styles.rightContainer}>
           <Appbar.Action
             icon={Icons.Icon12}
             onPress={() => navigation.navigate('Profile')}
             color="#fff"
           />
-        </View>
+        </View> */}
       </Appbar.Header>
     </>
   );

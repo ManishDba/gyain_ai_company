@@ -1563,9 +1563,9 @@ if (isAlwaysDownload) {
                     );
                     return;
                   }
-                  // if (isRecording) {
-                  //   toggleRecording();
-                  // }
+                  if (isRecording) {
+                    toggleRecording();
+                  }
                   sendMessage(isRecording ? partialText : inputText);
                   setShowAllSlugs(false);
                 }}
@@ -1585,7 +1585,7 @@ if (isAlwaysDownload) {
                 </TouchableOpacity>
               )}
 
-              {/* <TouchableOpacity
+              <TouchableOpacity
                 onPress={toggleRecording}
                 style={[
                   styles.micButton,
@@ -1609,7 +1609,7 @@ if (isAlwaysDownload) {
                     style={[styles.micImage, { tintColor: "#000" }]}
                   />
                 </Animated.View>
-              </TouchableOpacity> */}
+              </TouchableOpacity>
             </View>
 
             {/* ✅ Send disabled during generating */}
@@ -1625,9 +1625,9 @@ if (isAlwaysDownload) {
                   );
                   return;
                 }
-                // if (isRecording) {
-                //   toggleRecording();
-                // }
+                if (isRecording) {
+                  toggleRecording();
+                }
                 sendMessage(inputText);
                 setShowAllSlugs(false);
               }}
@@ -1653,7 +1653,6 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 5,
     marginRight: 5,
-    paddingBottom:75,
   },
   contentContainer: {
     flex: 1,

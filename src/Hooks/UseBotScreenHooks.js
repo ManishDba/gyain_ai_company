@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Keyboard, Platform, PermissionsAndroid } from "react-native";
+import { Keyboard, Platform, PermissionsAndroid ,ActionSheetIOS} from "react-native";
 import axios from "../../services/axios";
 import endpoint from "../../services/endpoint";
 import { useDispatch, useSelector } from "react-redux";
@@ -10,6 +10,8 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { dateKeywordReplace } from "../components/dateKeywordReplace";
 import { extractPeriod } from "../components/extractPeriod";
 import axiosWl from "../../services/axiosWl";
+import Voice from "@react-native-voice/voice";
+
 
 const greetings = [
   "hi",
@@ -285,7 +287,7 @@ const datePattern = dateFormatOption
   else if (/^\d{2},\d{2},\d{4}$/.test(str)) {
     [dd, mm, yyyy] = str.split(',');
   }
- 
+  
   // yyyymmdd
   else if (/^\d{8}$/.test(str)) {
     yyyy = str.slice(0, 4);
@@ -1240,7 +1242,7 @@ setMatchSlugs(response.data.results);
 
       let slugs = [];
       const isSuperUser = respons.data.user.is_superuser;
-      if (botLevel === 1) {
+      if (true) {
         slugs = response.data.results
           .filter(
             (item) => item.division === catagoryName &&
@@ -2110,7 +2112,7 @@ setMatchSlugs(response.data.results);
       .trim();
   };
 
-  const requestMicrophonePermission = async () => {
+const requestMicrophonePermission = async () => {
     if (Platform.OS !== "android") return true;
     try {
       const granted = await PermissionsAndroid.request(
@@ -2129,183 +2131,183 @@ setMatchSlugs(response.data.results);
     }
   };
 
-  // // Clean stop function - simplified
-  // const cleanStop = async () => {
-  //   try {
-  //     await Voice.stop();
-  //     await Voice.cancel(); // Ensure clean state
-  //   } catch (error) {
-  //     console.log("Clean stop error (can ignore):", error);
-  //   }
+  // Clean stop function - simplified
+  const cleanStop = async () => {
+    try {
+      await Voice.stop();
+      await Voice.cancel(); // Ensure clean state
+    } catch (error) {
+      console.log("Clean stop error (can ignore):", error);
+    }
 
-  //   // Reset states
-  //   setIsRecording(false);
-  //   setSttStatus("Disconnected");
-  // };
+    // Reset states
+    setIsRecording(false);
+    setSttStatus("Disconnected");
+  };
 
-  // const resetSilenceTimer = () => {
-  //   if (silenceTimer.current) clearTimeout(silenceTimer.current);
-  //   silenceTimer.current = setTimeout(() => {
-  //     console.log("⏳ No speech detected for 5s → auto-stopping mic...");
-  //     setIsRecording(false);
-  //     setSttStatus("Disconnected");
-  //     Voice.stop();
-  //   }, SILENCE_TIMEOUT);
-  // };
+  const resetSilenceTimer = () => {
+    if (silenceTimer.current) clearTimeout(silenceTimer.current);
+    silenceTimer.current = setTimeout(() => {
+      console.log("⏳ No speech detected for 5s → auto-stopping mic...");
+      setIsRecording(false);
+      setSttStatus("Disconnected");
+      Voice.stop();
+    }, SILENCE_TIMEOUT);
+  };
 
-  // const initializeVoice = async () => {
-  //   // When speech starts
-  //   Voice.onSpeechStart = () => {
-  //     console.log("🎤 Speech started");
-  //     setSttStatus("Listening...");
-  //     resetSilenceTimer(); // reset timer on start
-  //   };
+  const initializeVoice = async () => {
+    // When speech starts
+    Voice.onSpeechStart = () => {
+      console.log("🎤 Speech started");
+      setSttStatus("Listening...");
+      resetSilenceTimer(); // reset timer on start
+    };
 
-  //   // Handle partial results (real-time text)
-  //   Voice.onSpeechPartialResults = (e) => {
-  //     if (shouldIgnoreVoiceResults.current) return; // skip if message was just sent
+    // Handle partial results (real-time text)
+    Voice.onSpeechPartialResults = (e) => {
+      if (shouldIgnoreVoiceResults.current) return; // skip if message was just sent
 
-  //     const partialText = Array.isArray(e.value) ? e.value[0] : "";
-  //     const processedPartialText = replaceWords(partialText); // apply replacements
+      const partialText = Array.isArray(e.value) ? e.value[0] : "";
+      const processedPartialText = replaceWords(partialText); // apply replacements
 
-  //     setPartialText(processedPartialText);
-  //     resetSilenceTimer(); // reset silence timer
-  //   };
+      setPartialText(processedPartialText);
+      resetSilenceTimer(); // reset silence timer
+    };
 
-  //   // Handle final results
-  //   Voice.onSpeechResults = (e) => {
-  //     if (shouldIgnoreVoiceResults.current) return;
+    // Handle final results
+    Voice.onSpeechResults = (e) => {
+      if (shouldIgnoreVoiceResults.current) return;
 
-  //     const finalText = Array.isArray(e.value) ? e.value[0] : "";
-  //     const processedText = replaceWords(finalText); // apply replacements
+      const finalText = Array.isArray(e.value) ? e.value[0] : "";
+      const processedText = replaceWords(finalText); // apply replacements
 
-  //     setInputText(processedText);
-  //     setPartialText("");
-  //     setSttStatus("Complete");
+      setInputText(processedText);
+      setPartialText("");
+      setSttStatus("Complete");
 
-  //     if (silenceTimer.current) clearTimeout(silenceTimer.current); // clear timer
-  //   };
+      if (silenceTimer.current) clearTimeout(silenceTimer.current); // clear timer
+    };
 
-  //   // Handle errors
-  //   Voice.onSpeechError = (e) => {
-  //     console.log("❌ Speech error:", e);
-  //     setSttStatus("Error");
-  //     setIsRecording(false);
-  //     shouldIgnoreVoiceResults.current = false; // reset flag
-  //   };
+    // Handle errors
+    Voice.onSpeechError = (e) => {
+      console.log("❌ Speech error:", e);
+      setSttStatus("Error");
+      setIsRecording(false);
+      shouldIgnoreVoiceResults.current = false; // reset flag
+    };
 
-  //   // When speech ends
-  //   Voice.onSpeechEnd = () => {
-  //     console.log("✅ Speech ended");
-  //     setIsRecording(false);
-  //     setSttStatus("Disconnected");
-  //     shouldIgnoreVoiceResults.current = false; // reset flag
-  //   };
-  // };
+    // When speech ends
+    Voice.onSpeechEnd = () => {
+      console.log("✅ Speech ended");
+      setIsRecording(false);
+      setSttStatus("Disconnected");
+      shouldIgnoreVoiceResults.current = false; // reset flag
+    };
+  };
 
-  // // Voice event listeners setup
+  // Voice event listeners setup
+  useEffect(() => {
+    initializeVoice();
+
+    return () => {
+      console.log("Cleaning up voice listeners");
+      cleanStop().then(() => {
+        Voice.destroy().then(() => {
+          Voice.removeAllListeners();
+        });
+      });
+    };
+  }, []);
+
+  // Stop listening when leaving screen
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        console.log("Screen lost focus: stopping mic");
+        cleanStop();
+      };
+    }, [])
+  );
+
+  // Simplified toggle recording function - Manual control only
+  const toggleRecording = async () => {
+    const hasPermission = await requestMicrophonePermission();
+    if (!hasPermission) {
+      setSttStatus("Mic permission denied");
+      return;
+    }
+
+    try {
+      if (isRecording) {
+        // Manual STOP
+        console.log("🔴 Manually stopping mic...");
+        await Voice.stop();
+        setIsRecording(false);
+        setSttStatus("Disconnected");
+      } else {
+        // Manual START
+        console.log("🎤 Manually starting mic...");
+
+        // Clean previous state
+        await Voice.stop().catch(() => {});
+        await Voice.cancel().catch(() => {});
+
+        // Clear text and start fresh
+        setInputText("");
+        setPartialText("");
+        setSttStatus("Starting...");
+
+        // Start listening
+        await Voice.start("en-IN");
+        setIsRecording(true);
+      }
+    } catch (error) {
+      console.error("Voice error:", error);
+      setSttStatus(`Error: ${error.message}`);
+      setIsRecording(false);
+    }
+  };
+
   // useEffect(() => {
-  //   initializeVoice();
-
-  //   return () => {
-  //     console.log("Cleaning up voice listeners");
-  //     cleanStop().then(() => {
-  //       Voice.destroy().then(() => {
-  //         Voice.removeAllListeners();
-  //       });
-  //     });
-  //   };
+  //   fetchCorrespondents();
   // }, []);
 
-  // // Stop listening when leaving screen
-  // useFocusEffect(
-  //   useCallback(() => {
-  //     return () => {
-  //       console.log("Screen lost focus: stopping mic");
-  //       cleanStop();
-  //     };
-  //   }, [])
-  // );
+  useEffect(() => {
+    if (!disableAutoScroll && flatListRef.current) {
+      flatListRef.current.scrollToEnd({ animated: true });
+    }
+  }, [messages]);
 
-  // // Simplified toggle recording function - Manual control only
-  // const toggleRecording = async () => {
-  //   const hasPermission = await requestMicrophonePermission();
-  //   if (!hasPermission) {
-  //     setSttStatus("Mic permission denied");
-  //     return;
-  //   }
+  const speak = (text) => {
+    if (!text) return;
+    Speech.stop();
+    Speech.speak(text.replace(/<[^>]*>?/gm, ""), {
+      onStart: () => {
+        setIsSpeaking(true);
+        setIsPaused(false);
+      },
+      onDone: () => {
+        setIsSpeaking(false);
+        setIsPaused(false);
+      },
+    });
+  };
 
-  //   try {
-  //     if (isRecording) {
-  //       // Manual STOP
-  //       console.log("🔴 Manually stopping mic...");
-  //       await Voice.stop();
-  //       setIsRecording(false);
-  //       setSttStatus("Disconnected");
-  //     } else {
-  //       // Manual START
-  //       console.log("🎤 Manually starting mic...");
+  const pause = () => {
+    Speech.pause();
+    setIsPaused(true);
+  };
 
-  //       // Clean previous state
-  //       await Voice.stop().catch(() => {});
-  //       await Voice.cancel().catch(() => {});
+  const resume = () => {
+    Speech.resume();
+    setIsPaused(false);
+  };
 
-  //       // Clear text and start fresh
-  //       setInputText("");
-  //       setPartialText("");
-  //       setSttStatus("Starting...");
-
-  //       // Start listening
-  //       await Voice.start("en-IN");
-  //       setIsRecording(true);
-  //     }
-  //   } catch (error) {
-  //     console.error("Voice error:", error);
-  //     setSttStatus(`Error: ${error.message}`);
-  //     setIsRecording(false);
-  //   }
-  // };
-
-  // // useEffect(() => {
-  // //   fetchCorrespondents();
-  // // }, []);
-
-  // useEffect(() => {
-  //   if (!disableAutoScroll && flatListRef.current) {
-  //     flatListRef.current.scrollToEnd({ animated: true });
-  //   }
-  // }, [messages]);
-
-  // const speak = (text) => {
-  //   if (!text) return;
-  //   Speech.stop();
-  //   Speech.speak(text.replace(/<[^>]*>?/gm, ""), {
-  //     onStart: () => {
-  //       setIsSpeaking(true);
-  //       setIsPaused(false);
-  //     },
-  //     onDone: () => {
-  //       setIsSpeaking(false);
-  //       setIsPaused(false);
-  //     },
-  //   });
-  // };
-
-  // const pause = () => {
-  //   Speech.pause();
-  //   setIsPaused(true);
-  // };
-
-  // const resume = () => {
-  //   Speech.resume();
-  //   setIsPaused(false);
-  // };
-
-  // const stop = () => {
-  //   Speech.stop();
-  //   setIsSpeaking(false);
-  //   setIsPaused(false);
-  // };
+  const stop = () => {
+    Speech.stop();
+    setIsSpeaking(false);
+    setIsPaused(false);
+  };
 
   const toggleFilterInput = (tableKey, columnName) => {
     setActiveFilterColumnsByTable((prev) => {
@@ -2413,13 +2415,13 @@ setMatchSlugs(response.data.results);
     handleFilterChange,
     fetchCorrespondents,
     applyFilters,
-    // speak,
-    // pause,
-    // resume,
-    // stop,
+    speak,
+    pause,
+    resume,
+    stop,
     setPaginationState,
     handleRefresh,
-    // toggleRecording,
+    toggleRecording,
     sendMessage,
     handleSlugPress,
     formatCellValue,

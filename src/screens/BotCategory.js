@@ -1,3 +1,4 @@
+
 import React, {
   useEffect,
   useCallback,
@@ -23,10 +24,10 @@ import { useNavigation } from "@react-navigation/native";
 import AuthHooks from "../Hooks/AuthHooks";
 import useProfileHooks from "../Hooks/ProfileHooks";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import Iconchat from "react-native-vector-icons/Entypo";
+import Ionicons from "react-native-vector-icons/Ionicons";
+import { AppColors, AppSizes, AppFonts, AppShadows } from "../theme";
 
 const { width } = Dimensions.get("window");
-const CARD_WIDTH = width - 30; // Adjusted for list view with padding
 
 const BotCategory = ({route}) => {
   const navigation = useNavigation();
@@ -106,18 +107,21 @@ const BotCategory = ({route}) => {
   }, []);
 
   const renderItem = useCallback(
-    ({ item }) => {
+    ({ item, index }) => {
       return (
         <TouchableOpacity
-          style={styles.card}
+          style={styles.tutorCard}
           onPress={() => handleCategoryPress(item)}
-          activeOpacity={0.8}
+          activeOpacity={0.7}
         >
-          <View style={styles.cardContent}>
-            <Text style={styles.cardTitle} numberOfLines={2}>
-              <Iconchat name="chat" size={22} color="#000" /> {item.display}
-            </Text>
+          <View style={styles.tutorInfo}>
+            <Text style={styles.tutorName}>{item.display}</Text>
           </View>
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={AppColors.textTertiary}
+          />
         </TouchableOpacity>
       );
     },
@@ -144,38 +148,31 @@ const BotCategory = ({route}) => {
     []
   );
 
-  const ItemSeparator = useCallback(
-    () => <View style={styles.separator} />,
-    []
-  );
-
-  const SearchBar = useMemo(
-    () => (
-      <View style={styles.searchContainer}>
-        <Icon name="magnify" size={22} color="#000" />
-        <TextInput
-          ref={searchInputRef}
-          style={styles.searchInput}
-          placeholder="Search bots..."
-          placeholderTextColor="#999"
-          value={searchText}
-          onChangeText={handleSearchChange}
-          autoCorrect={false}
-          autoCapitalize="none"
-          returnKeyType="search"
-          blurOnSubmit={false}
-        />
-        {searchText.length > 0 && (
-          <TouchableOpacity style={styles.clearButton} onPress={clearSearch}>
-            <Text style={styles.clearButtonText}>
-              <Icon name="close" size={22} color="#000" />
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    ),
-    [searchText, handleSearchChange, clearSearch]
-  );
+  // const SearchBar = useMemo(
+  //   () => (
+  //     <View style={styles.searchContainer}>
+  //       <Icon name="magnify" size={AppSizes.iconMd} color={AppColors.textSecondary} />
+  //       <TextInput
+  //         ref={searchInputRef}
+  //         style={styles.searchInput}
+  //         placeholder="Search bots..."
+  //         placeholderTextColor={AppColors.textTertiary}
+  //         value={searchText}
+  //         onChangeText={handleSearchChange}
+  //         autoCorrect={false}
+  //         autoCapitalize="none"
+  //         returnKeyType="search"
+  //         blurOnSubmit={false}
+  //       />
+  //       {searchText.length > 0 && (
+  //         <TouchableOpacity style={styles.clearButton} onPress={clearSearch}>
+  //           <Icon name="close" size={AppSizes.iconMd} color={AppColors.textSecondary} />
+  //         </TouchableOpacity>
+  //       )}
+  //     </View>
+  //   ),
+  //   [searchText, handleSearchChange, clearSearch]
+  // );
 
   const Breadcrumb = useMemo(() => {
     if (categoryStack.length === 0) return null;
@@ -195,12 +192,11 @@ const BotCategory = ({route}) => {
   const ListHeader = useMemo(
     () => (
       <View style={styles.headerContainer}>
-        <Text style={styles.mainTitle}>Select the Master Bot</Text>
-        {/* {SearchBar} */}
+        <Text style={styles.mainTitle}>AI Assistants</Text>
         {Breadcrumb}
-      </View>
+      </View> 
     ),
-    [SearchBar, Breadcrumb]
+    [Breadcrumb]
   );
 
   const EmptyComponent = useMemo(
@@ -216,7 +212,7 @@ const BotCategory = ({route}) => {
         </Text>
       </View>
     ),
-    [searchText, clearSearch]
+    [searchText]
   );
 
   return (
@@ -232,7 +228,6 @@ const BotCategory = ({route}) => {
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        ItemSeparatorComponent={ItemSeparator}
         keyboardShouldPersistTaps="handled"
         removeClippedSubviews={false}
         windowSize={10}
@@ -249,129 +244,119 @@ const BotCategory = ({route}) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: AppColors.background,
   },
   listContent: {
-    padding: 15,
-    paddingBottom: 30,
+    padding: AppSizes.md,
+    paddingBottom: 100,
   },
   headerContainer: {
-    marginBottom: 10,
+    marginBottom: AppSizes.lg,
   },
   mainTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    textAlign: "start",
-    marginBottom: 5,
+    fontSize: AppFonts.xxl,
+    fontWeight: '600',
+    fontFamily: AppFonts.semiBold,
+    color: AppColors.textPrimary,
+    marginBottom: AppSizes.md,
   },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    paddingHorizontal: 5,
-    paddingVertical: 5,
-    marginBottom: 5,
+    backgroundColor: AppColors.white,
+    borderRadius: AppSizes.radiusMd,
+    paddingHorizontal: AppSizes.md,
+    paddingVertical: AppSizes.sm,
+    marginBottom: AppSizes.md,
     borderWidth: 1,
-    borderColor: "#e1e8ed",
+    borderColor: AppColors.border,
+    ...AppShadows.small,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    color: "#333",
+    fontSize: AppFonts.md,
+    fontFamily: AppFonts.regular,
+    color: AppColors.textPrimary,
     paddingVertical: 0,
+    marginLeft: AppSizes.sm,
   },
   clearButton: {
-    padding: 5,
-    marginLeft: 10,
-  },
-  clearButtonText: {
-    fontSize: 16,
-    color: "#999",
-    fontWeight: "bold",
+    padding: AppSizes.xs,
   },
   breadcrumbContainer: {
-    marginBottom: 20,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    backgroundColor: "#fff",
-    borderRadius: 12,
+    marginBottom: AppSizes.md,
+    paddingHorizontal: AppSizes.md,
+    paddingVertical: AppSizes.sm,
+    backgroundColor: AppColors.white,
+    borderRadius: AppSizes.radiusMd,
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    ...AppShadows.small,
     borderWidth: 1,
-    borderColor: "#e1e8ed",
+    borderColor: AppColors.border,
   },
   backButton: {
-    marginRight: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: "#007bff",
+    marginRight: AppSizes.sm,
+    paddingHorizontal: AppSizes.sm,
+    paddingVertical: AppSizes.xs,
+    borderRadius: AppSizes.radiusSm,
+    backgroundColor: AppColors.primary,
   },
   backButtonText: {
     fontWeight: "600",
-    fontSize: 14,
-    color: "#fff",
+    fontFamily: AppFonts.semiBold,
+    fontSize: AppFonts.sm,
+    color: AppColors.white,
   },
   breadcrumbText: {
-    fontSize: 14,
-    color: "#333",
-    fontWeight: "500",
+    fontSize: AppFonts.sm,
+    fontFamily: AppFonts.medium,
+    color: AppColors.textSecondary,
     flexShrink: 1,
   },
-  separator: {
-    height: 15,
-  },
-  card: {
-    width: CARD_WIDTH,
-    backgroundColor: "#f1f3f4" /* Light gray background from image */,
+  
+  // Card styles matching the image - no icon, same color
+  tutorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: AppColors.surface, // Single light gray color
     borderRadius: 16,
-    shadowColor: "#fff",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
-    borderLeftWidth: 4,
-    borderLeftColor: "#072c70",
-    overflow: "hidden",
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    marginBottom: 12,
   },
-  cardContent: {
-    padding: 10,
-    minHeight: 55,
-    justifyContent: "center",
+  tutorInfo: {
+    flex: 1,
   },
-  cardTitle: {
+  tutorName: {
     fontSize: 17,
-    fontWeight: "500",
-    color: "#1a1a1a",
-    textAlign: "left",
-    marginBottom: 5,
-    lineHeight: 18,
+    fontWeight: '500',
+    fontFamily: AppFonts.medium,
+    color: AppColors.textPrimary,
   },
+  
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 60,
-    paddingHorizontal: 20,
+    paddingHorizontal: AppSizes.xl,
   },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: AppFonts.xl,
     fontWeight: "bold",
-    color: "#333",
-    marginBottom: 8,
+    fontFamily: AppFonts.semiBold,
+    color: AppColors.textPrimary,
+    marginBottom: AppSizes.sm,
   },
   emptyText: {
-    fontSize: 16,
-    color: "#666",
+    fontSize: AppFonts.md,
+    fontFamily: AppFonts.regular,
+    color: AppColors.textSecondary,
     textAlign: "center",
     lineHeight: 22,
-    marginBottom: 20,
+    marginBottom: AppSizes.lg,
   },
 });
 

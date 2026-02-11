@@ -53,36 +53,9 @@ const DATE_DATA_FORMATS = [
 const DATE_KEYWORDS = ["date", "month", "year", "day", "quarter", "period"];
 
 const brightColors = [
-"#052C6B",
-"#2D9FE6",
-"#227481",
-"#5AC48F",
-"#ABC856",
-"#FFD747",
-"#F58B00",
-"#A44813",
-"#7D1212",
-"#53284E",
-"#0A53CA",
-"#62B7ED",
-"#34B2C5",
-"#83D2AB",
-"#C0D680",
-"#FFE175",
-"#FFA938",
-"#E56B24",
-"#CD1D1D",
-"#94478C",
-"#3981F6",
-"#92CDF2",
-"#6FCBD9",
-"#A8E0C4",
-"#D3E2A6",
-"#FFEA9F",
-"#FFC374",
-"#ED9766",
-"#E75656",
-"#BD76B6",
+   '#fee825', '#b6de2b', '#6cce5a', '#1f9d8a', '#26838f',
+   '#31678e', '#3f4a8a', '#482777', '#5e4fa2', '#3288bd',
+ 
 ];
 
 const yearRegex = /^(19|20)\d{2}$/;
