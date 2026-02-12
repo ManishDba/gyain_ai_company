@@ -33,10 +33,20 @@ import { useSelector } from 'react-redux';
 import MediaSection from '../components/MediaSection';
 import { ENV } from '../../env';
 import RNFS from 'react-native-fs';
-import axios from "../../services/axios";
-import { Buffer } from "buffer";
-const BASE_URL = ENV.PDF_URL
+import axios from '../../services/axios';
+import { Buffer } from 'buffer';
+const BASE_URL = ENV.PDF_URL;
 import FileViewer from 'react-native-file-viewer';
+import SpeechVisualizer from '../components/SpeechAnimated';
+
+import {
+  AppTheme,
+  AppColors,
+  AppSizes,
+  AppFonts,
+  getFontFamily,
+  AppShadows,
+} from '../theme';
 
 export const isValidNumber = value => {
   // Handle null, undefined, empty string, or non-string/non-number types
@@ -233,8 +243,8 @@ const DataScreen = ({ route, navigation }) => {
     handleUserMessageDoubleTap,
     formatCellValue,
     loadingDots,
-    fetchCorrespondents
-  } = UseBotScreenHooks({ route,navigation });
+    fetchCorrespondents,
+  } = UseBotScreenHooks({ route, navigation });
 
   const categoryId = route?.params?.Cat_name;
 
@@ -249,6 +259,7 @@ const DataScreen = ({ route, navigation }) => {
   const correspondents = useSelector(
     state => state.askSlice.Category?.results || [],
   );
+
   const configData = useSelector(state => state.usersSlice.config || {});
 
   const allSlugs = [
@@ -274,27 +285,30 @@ const DataScreen = ({ route, navigation }) => {
     fetchCorrespondents();
   }, []);
 
-
   const isFirstRender = useRef(true);
   const prevCategoryId = useRef(categoryId);
 
-   useEffect(() => {
+  useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       prevCategoryId.current = categoryId;
       return;
     }
     if (categoryId && categoryId !== prevCategoryId.current) {
-      console.log('✅ Category changed from', prevCategoryId.current, 'to', categoryId);
+      console.log(
+        '✅ Category changed from',
+        prevCategoryId.current,
+        'to',
+        categoryId,
+      );
       prevCategoryId.current = categoryId;
-    
+
       setCurrentPage(1);
       setSortStateByTable({});
       setSelectedKeyItems({});
       navigation.replace('DataScreen', { Cat_name: categoryId });
     }
   }, [categoryId, navigation]);
-
 
   const parseKeyItems = keyItemsString => {
     try {
@@ -546,27 +560,24 @@ const DataScreen = ({ route, navigation }) => {
     },
   };
 
-const addBreaksAfterLinks = (html, isDownloadRequest) => {
-  html = html.replace(/<a /i, '<br/><br/><a ');
-  html = html.replace(/<\/a>(?!\s*<br\s*\/?>)/gi, '</a><br/><br/>');
- 
- 
-  if (isDownloadRequest) {
-      // 👉 Remove "(Page X)" from link text
-  html = html.replace(/\(Page\s*\d+\)/gi, '');
-    let linkFound = false;
-    html = html.replace(/<a\s[^>]*>.*?<\/a>/gi, (match) => {
-      if (!linkFound) {
-        linkFound = true;
-        return match;
-      }
-      return '';
-    });
-  }
-  return html;
-};
- 
+  const addBreaksAfterLinks = (html, isDownloadRequest) => {
+    html = html.replace(/<a /i, '<br/><br/><a ');
+    html = html.replace(/<\/a>(?!\s*<br\s*\/?>)/gi, '</a><br/><br/>');
 
+    if (isDownloadRequest) {
+      // 👉 Remove "(Page X)" from link text
+      html = html.replace(/\(Page\s*\d+\)/gi, '');
+      let linkFound = false;
+      html = html.replace(/<a\s[^>]*>.*?<\/a>/gi, match => {
+        if (!linkFound) {
+          linkFound = true;
+          return match;
+        }
+        return '';
+      });
+    }
+    return html;
+  };
 
   const renderChat = ({ item, index }) => {
     const { type = '', text = '', data = {}, sender = 'system' } = item;
@@ -638,11 +649,13 @@ const addBreaksAfterLinks = (html, isDownloadRequest) => {
         let isDownloadRequest = false;
         for (let i = currentIndex - 1; i >= 0; i--) {
           if (messages[i]?.sender === 'user') {
-            isDownloadRequest = messages[i]?.text?.toLowerCase().includes('download');
-            break; 
+            isDownloadRequest = messages[i]?.text
+              ?.toLowerCase()
+              .includes('download');
+            break;
           }
         }
-      
+
         const dynamicTagsStyles = parseCssFromHtml(text);
         return (
           <Pressable
@@ -672,7 +685,12 @@ const addBreaksAfterLinks = (html, isDownloadRequest) => {
               )}
               <RenderHtml
                 contentWidth={Dimensions.get('window').width}
-                source={{ html: addBreaksAfterLinks(text || '<p></p>', isDownloadRequest) }}
+                source={{
+                  html: addBreaksAfterLinks(
+                    text || '<p></p>',
+                    isDownloadRequest,
+                  ),
+                }}
                 baseStyle={{
                   fontFamily: sender === 'user' ? 'Arial' : 'Helvetica',
                   color: sender === 'user' ? 'white' : 'black',
@@ -744,70 +762,91 @@ const addBreaksAfterLinks = (html, isDownloadRequest) => {
                   a: {
                     onPress: async (_, href) => {
                       const isDownload = isDownloadRequest;
-                
+
                       let cleanHref = (href || '')
                         .trim()
                         .replace(/^about:\/\//, '')
                         .replace(/^file:\/\//, '');
-                
+
                       let finalUrl = cleanHref;
-                      if (!cleanHref.startsWith("http")) {
-                        finalUrl = `${BASE_URL}/${cleanHref.replace(/^\/+/, "")}`;
-                        finalUrl = finalUrl.replace(/([^:])\/+/g, "$1/");
+                      if (!cleanHref.startsWith('http')) {
+                        finalUrl = `${BASE_URL}/${cleanHref.replace(
+                          /^\/+/,
+                          '',
+                        )}`;
+                        finalUrl = finalUrl.replace(/([^:])\/+/g, '$1/');
                       }
-                 
-                 
-                
+
                       if (!isDownload) {
-                        navigation.navigate('PdfViewerScreen', { url: finalUrl });
+                        navigation.navigate('PdfViewerScreen', {
+                          url: finalUrl,
+                        });
                         return;
                       }
-                
+
                       // 👉 DOWNLOAD FLOW
                       try {
-                        if (Platform.OS === 'android' && Platform.Version <= 28) {
+                        if (
+                          Platform.OS === 'android' &&
+                          Platform.Version <= 28
+                        ) {
                           const granted = await PermissionsAndroid.request(
-                            PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE
+                            PermissionsAndroid.PERMISSIONS
+                              .WRITE_EXTERNAL_STORAGE,
                           );
-                          if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
+                          if (granted !== PermissionsAndroid.RESULTS.GRANTED)
+                            return;
                         }
-                
-                // Try to get filename from link text first
-                let fileName = '';
-                if (text && typeof text === 'string') {
-                  // Extract inner text of anchor if present
-                  const match = text.match(/>([^<]+\.pdf)/i);
-                  if (match && match[1]) {
-                    fileName = match[1].replace(/\(Page\s*\d+\)/gi, '').trim();
-                  }
-                }
-                 
-                // Fallback: use URL path
-                if (!fileName) {
-                  fileName = finalUrl.split('/').pop().split('?')[0].split('#')[0];
-                  fileName = decodeURIComponent(fileName);
-                }
-                 
-                // Ensure .pdf extension
-                if (!fileName.toLowerCase().endsWith('.pdf')) fileName += '.pdf';
-                if (!fileName || fileName === '.pdf') fileName = 'document.pdf';
-                
+
+                        // Try to get filename from link text first
+                        let fileName = '';
+                        if (text && typeof text === 'string') {
+                          // Extract inner text of anchor if present
+                          const match = text.match(/>([^<]+\.pdf)/i);
+                          if (match && match[1]) {
+                            fileName = match[1]
+                              .replace(/\(Page\s*\d+\)/gi, '')
+                              .trim();
+                          }
+                        }
+
+                        // Fallback: use URL path
+                        if (!fileName) {
+                          fileName = finalUrl
+                            .split('/')
+                            .pop()
+                            .split('?')[0]
+                            .split('#')[0];
+                          fileName = decodeURIComponent(fileName);
+                        }
+
+                        // Ensure .pdf extension
+                        if (!fileName.toLowerCase().endsWith('.pdf'))
+                          fileName += '.pdf';
+                        if (!fileName || fileName === '.pdf')
+                          fileName = 'document.pdf';
+
                         const downloadPath = `${RNFS.DownloadDirectoryPath}/${fileName}`;
-                
+
                         const response = await axios.get(finalUrl, {
                           responseType: 'arraybuffer',
                         });
-                
-                        const base64Data = Buffer.from(response.data).toString('base64');
-                        await RNFS.writeFile(downloadPath, base64Data, 'base64');
+
+                        const base64Data = Buffer.from(response.data).toString(
+                          'base64',
+                        );
+                        await RNFS.writeFile(
+                          downloadPath,
+                          base64Data,
+                          'base64',
+                        );
                         await RNFS.scanFile(downloadPath);
-                
-                
-                Alert.alert(
-                  'Success',
-                  `${fileName} downloaded successfully!\n\nYou can find it in your Downloads folder.`,
-                  [{ text: 'Got it' }]
-                );
+
+                        Alert.alert(
+                          'Success',
+                          `${fileName} downloaded successfully!\n\nYou can find it in your Downloads folder.`,
+                          [{ text: 'Got it' }],
+                        );
                       } catch (error) {
                         console.log('DOWNLOAD ERROR =>', error);
                         Alert.alert('Download Failed ❌');
@@ -821,16 +860,16 @@ const addBreaksAfterLinks = (html, isDownloadRequest) => {
         );
       }
 
-      case "html_structured": {
+      case 'html_structured': {
         const {
           heading,
           beforeTableH6 = [],
           tableData,
           afterTableH6 = [],
           footerParagraphs = [],
-          references = []
+          references = [],
         } = data || {};
-      
+
         return (
           <View style={{ marginVertical: 8 }}>
             <CustomHtmlTable
@@ -951,7 +990,7 @@ const addBreaksAfterLinks = (html, isDownloadRequest) => {
           </View>
         );
 
-      case "media":
+      case 'media':
         return <MediaSection data={data} />;
 
       default:
@@ -1142,14 +1181,13 @@ const addBreaksAfterLinks = (html, isDownloadRequest) => {
       );
     };
 
-const getTextAlignment = (value, columnType) => {
-  if (value === null || value === undefined || value === '') return 'left';
+    const getTextAlignment = (value, columnType) => {
+      if (value === null || value === undefined || value === '') return 'left';
 
-  if (columnType?.toLowerCase() === 'number') return 'right';
+      if (columnType?.toLowerCase() === 'number') return 'right';
 
-  return 'left';
-};
-
+      return 'left';
+    };
 
     const formatHeaderName = name => {
       if (!name) return '';
@@ -1172,9 +1210,9 @@ const getTextAlignment = (value, columnType) => {
         <ScrollView horizontal showsHorizontalScrollIndicator>
           <View style={{ minWidth: '98%' }}>
             <View style={styles.tableContainer}>
-            {periodText && activeSlug?.display !== "HR" && (
-            <Text style={styles.hedingPeriod}>{periodText}</Text>
-              )}{" "}
+              {periodText && activeSlug?.display !== 'HR' && (
+                <Text style={styles.hedingPeriod}>{periodText}</Text>
+              )}{' '}
               <View style={[styles.tableRow, styles.tableHeaderRow]}>
                 {data?.Columns?.map((c, index) => (
                   <View
@@ -1264,78 +1302,81 @@ const getTextAlignment = (value, columnType) => {
                   </View>
                 ))}
               </View>
-{hasNoRows ? (
-  <View
-    style={{
-      paddingVertical: 10,
-      justifyContent: "center",
-      alignItems: "center",
-    }}
-  >
-    <Text
-      style={{
-        color: "red",
-        fontSize: 15,
-        fontWeight: "600",
-        textAlign: "center",
-      }}
-    >
-      There are No Records.
-    </Text>
-  </View>
-) : (
-  paginatedRows.map((row, rowIndex) => (
-    <View key={rowIndex} style={styles.tableRow}>
-      {row.map((cell, cellIndex) => {
-        const columnName = data?.Columns?.[cellIndex]?.Name || "";
-        const columnType = data?.Columns?.[cellIndex]?.Type || "";
- 
-        const displayValue = formatCellValue(
-          cell,
-          columnName,
-          columnType
-        );
-        const wrappedValue = wrapLongText(String(displayValue), 40);
- 
-        const numericValue = isValidNumber(cell)
-          ? typeof cell === "number"
-            ? cell
-            : parseFloat(String(cell).replace(/,/g, ""))
-          : null;
- 
-        return (
-          <View
-            key={cellIndex}
-            style={[
-              styles.cell,
-              styles.borderRight,
-              {
-                width: columnWidths[cellIndex] || 100,
-                flex: data?.Columns?.length <= 10 ? 1 : 0,
-                minWidth:
-                  data?.Columns?.length <= 10
-                    ? 0
-                    : columnWidths[cellIndex] || 100,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.tableCell,
-                { textAlign: getTextAlignment(cell, columnType) },
-                numericValue !== null && numericValue < 0
-                  ? { color: "red" }
-                  : null,
-              ]}
-            >
-              {wrappedValue}
-            </Text>
-          </View>
-        );
-      })}
-    </View>
-  ))
-)}
+              {hasNoRows ? (
+                <View
+                  style={{
+                    paddingVertical: 10,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: 'red',
+                      fontSize: 15,
+                      fontWeight: '600',
+                      textAlign: 'center',
+                    }}
+                  >
+                    There are No Records.
+                  </Text>
+                </View>
+              ) : (
+                paginatedRows.map((row, rowIndex) => (
+                  <View key={rowIndex} style={styles.tableRow}>
+                    {row.map((cell, cellIndex) => {
+                      const columnName = data?.Columns?.[cellIndex]?.Name || '';
+                      const columnType = data?.Columns?.[cellIndex]?.Type || '';
+
+                      const displayValue = formatCellValue(
+                        cell,
+                        columnName,
+                        columnType,
+                      );
+                      const wrappedValue = wrapLongText(
+                        String(displayValue),
+                        40,
+                      );
+
+                      const numericValue = isValidNumber(cell)
+                        ? typeof cell === 'number'
+                          ? cell
+                          : parseFloat(String(cell).replace(/,/g, ''))
+                        : null;
+
+                      return (
+                        <View
+                          key={cellIndex}
+                          style={[
+                            styles.cell,
+                            styles.borderRight,
+                            {
+                              width: columnWidths[cellIndex] || 100,
+                              flex: data?.Columns?.length <= 10 ? 1 : 0,
+                              minWidth:
+                                data?.Columns?.length <= 10
+                                  ? 0
+                                  : columnWidths[cellIndex] || 100,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.tableCell,
+                              { textAlign: getTextAlignment(cell, columnType) },
+                              numericValue !== null && numericValue < 0
+                                ? { color: 'red' }
+                                : null,
+                            ]}
+                          >
+                            {wrappedValue}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ))
+              )}
               {showFooter && (
                 <View style={[styles.tableRow, styles.tableFooterRow]}>
                   {footerRow.map((cell, cellIndex) => (
@@ -1357,7 +1398,12 @@ const getTextAlignment = (value, columnType) => {
                       <Text
                         style={[
                           styles.tableFooter,
-                          { textAlign:  getTextAlignment(cell, data?.Columns?.[cellIndex]?.Type)},
+                          {
+                            textAlign: getTextAlignment(
+                              cell,
+                              data?.Columns?.[cellIndex]?.Type,
+                            ),
+                          },
                           typeof cell === 'number' && cell < 0
                             ? { color: 'red' }
                             : null,
@@ -1594,105 +1640,85 @@ const getTextAlignment = (value, columnType) => {
         <View
           style={[
             styles.footer,
-
             androidVersion <= 33
-              ? {
-                  // ANDROID 10 → 13 (NO resize)
-                  marginBottom: isKeyboardVisible ? 10 : 0,
-                }
-              : {
-                  // ANDROID 14 → 15 (REAL resize)
-                  bottom: keyboardHeight,
-                },
+              ? { marginBottom: isKeyboardVisible ? 10 : 0 }
+              : { bottom: keyboardHeight },
           ]}
         >
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              multiline
-              placeholder={
-                isRecording ? 'Listening...' : 'Enter your text here'
-              }
-              value={isRecording ? partialText || inputText : inputText}
-              onChangeText={text => !isRecording && setInputText(text)}
-              onSubmitEditing={() => {
-                if (isGenerating) return;
-                if (
-                  !currentActiveSlug?.id ||
-                  currentActiveSlug?.display.includes('Clear')
-                ) {
-                  Alert.alert(
-                    "Please select any one of the Bot's options to continue.",
-                  );
-                  return;
-                }
-                sendMessage(isRecording ? partialText : inputText);
-                setShowAllSlugs(false);
-              }}
-              editable={!isRecording}
-              blurOnSubmit={false}
-            />
+          {/* 🔴 Recording Mode (FULL WIDTH – stays separate) */}
+          {isRecording ? (
+            <View style={styles.recordingVisualizerContainer}>
+              <SpeechVisualizer isActive={isRecording} subjectColor="#FF5733" />
+              <Text style={styles.recordingText}>Listening...</Text>
 
-            {inputText.length > 0 && (
-              <TouchableOpacity onPress={clearText} style={styles.clearButton}>
-                <Icon name="close" size={22} color="#000" />
-              </TouchableOpacity>
-            )}
+              {partialText && (
+                <Text style={styles.partialTextDisplay}>{partialText}</Text>
+              )}
 
-            <TouchableOpacity
-              onPress={toggleRecording}
-              style={[
-                styles.micButton,
-                { backgroundColor: isRecording ? '#FF5733' : '#fff' },
-              ]}
-              disabled={sttStatus === 'Audio config error'}
-            >
-              <Animated.View
-                style={[
-                  styles.micImageContainer,
-                  {
-                    transform: [{ scale: pulseAnim }],
-                    backgroundColor: isRecording
-                      ? 'rgba(255, 87, 51, 0.3)'
-                      : 'transparent',
-                  },
-                ]}
+              <TouchableOpacity
+                style={styles.micButtonRecording}
+                onPress={toggleRecording}
+                disabled={sttStatus === 'Audio config error'}
               >
-                <Image
-                  source={Icons.Icon08}
-                  style={[styles.micImage, { tintColor: '#000' }]}
+                <Icon name="mic" size={26} color="#FF5733" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            /* 🟢 Normal Input Row */
+            <View style={styles.inputContainer}>
+              <View style={styles.inputRow}>
+                {/* Text Input */}
+                <TextInput
+                  style={styles.input}
+                  multiline
+                  placeholder="Enter your text here"
+                  value={inputText}
+                  onChangeText={setInputText}
+                  placeholderTextColor="#999"
                 />
-              </Animated.View>
-            </TouchableOpacity>
-          </View>
+                
+                {inputText.length > 0 && (
+                  <TouchableOpacity
+                    onPress={clearText}
+                    style={styles.clearButton}
+                  >
+                    <Icon name="close" size={22} color="#000" />
+                  </TouchableOpacity>
+                )}
 
-          <TouchableOpacity
-            onPress={() => {
-              if (isGenerating) return;
-              if (
-                !currentActiveSlug?.id ||
-                currentActiveSlug?.display.includes('Clear')
-              ) {
-                Alert.alert(
-                  "Please select any one of the Bot's options to continue.",
-                );
-                return;
-              }
-              if (isRecording) toggleRecording();
-              sendMessage(inputText);
-              setShowAllSlugs(false);
-            }}
-            style={[
-              styles.sendButton,
-              (!inputText.trim() || isGenerating) && { opacity: 0.5 },
-            ]}
-            disabled={!inputText.trim() || isGenerating}
-          >
-            <Image
-              source={Icons.Icon11}
-              style={[styles.sendImage, { tintColor: '#fff' }]}
-            />
-          </TouchableOpacity>
+                {/* Mic Button */}
+                <TouchableOpacity
+                  onPress={toggleRecording}
+                  style={styles.micButton}
+                  disabled={sttStatus === 'Audio config error'}
+                >
+                  <Image
+                    source={Icons.Icon08}
+                    style={[styles.micImage, { tintColor: '#000' }]}
+                  />
+                </TouchableOpacity>
+
+                {/* Send Button */}
+                <TouchableOpacity
+                  onPress={() => {
+                    if (!inputText.trim() || isGenerating) return;
+                    sendMessage(inputText);
+                    setShowAllSlugs(false);
+                  }}
+                  style={[
+                    styles.sendButton,
+                    (!inputText.trim() || isGenerating) && { opacity: 0.5 },
+                  ]}
+                  disabled={!inputText.trim() || isGenerating}
+                >
+                  <Image
+                    source={Icons.Icon11}
+                    style={[styles.sendImage, { tintColor: '#fff' }]}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </View>
       </View>
 
@@ -1759,75 +1785,127 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 6,
-    zIndex: 10,
-    backgroundColor: '#fff', // add background
-    borderTopColor: '#ddd',
+    backgroundColor: AppColors.white,
+    paddingBottom: AppSizes.sm,
   },
+
+  // ==========================================
+  // Recording Visualizer - FULL WIDTH
+  // ==========================================
+  recordingVisualizerContainer: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: AppSizes.xl,
+    paddingHorizontal: AppSizes.lg,
+    backgroundColor: '#FFE8E3', // Peach/pink background
+    minHeight: AppTheme.verticalScale(400),
+    justifyContent: 'center',
+  },
+  recordingText: {
+    marginTop: AppSizes.lg,
+    fontSize: AppFonts.xl, // 20px responsive
+    fontFamily: getFontFamily('bold'), // Manrope Bold
+    color: AppColors.terracotta,
+    letterSpacing: AppFonts.letterSpacingWide,
+  },
+  partialTextDisplay: {
+    marginTop: AppSizes.md,
+    fontSize: AppFonts.md, // 16px responsive
+    fontFamily: getFontFamily('regular'), // Manrope Regular
+    color: AppColors.textPrimary,
+    textAlign: 'center',
+    paddingHorizontal: AppSizes.xl,
+    lineHeight: AppFonts.md * AppFonts.lineHeightRelaxed,
+    fontStyle: 'italic',
+  },
+
+  // Mic Button when Recording (centered below visualizer)
+  micButtonRecording: {
+    width: AppTheme.moderateScale(60),
+    height: AppTheme.moderateScale(60),
+    borderRadius: AppTheme.moderateScale(30),
+    backgroundColor: AppColors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: AppSizes.xl,
+    borderWidth: 3,
+    borderColor: AppColors.terracotta,
+    ...AppShadows.lg,
+  },
+
+  // ==========================================
+  // Input Container - Normal State
+  // ==========================================
   inputContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    marginHorizontal: AppSizes.md,
+    marginVertical: AppSizes.sm,
+    backgroundColor: AppColors.surface,
+    borderRadius: AppSizes.radiusXl,
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 25,
-    backgroundColor: '#fff',
+    borderColor: AppColors.border,
+    paddingHorizontal: AppSizes.sm,
+    paddingVertical: AppSizes.xs,
   },
+
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end', // textarea grows upward
+    gap: AppSizes.sm,
+  },
+
   input: {
     flex: 1,
-    Height: 40,
-    paddingHorizontal: 13,
-    paddingVertical: 13, // initial vertical padding centers single line
-    textAlignVertical: 'top', // text flows from top when multiple lines
-    fontSize: 16,
-    color: '#000',
+    fontSize: AppFonts.md,
+    fontFamily: getFontFamily('regular'),
+    maxHeight: AppTheme.moderateScale(100),
+    minHeight: AppSizes.buttonSm,
+    paddingHorizontal: AppSizes.md,
+    paddingVertical: AppSizes.sm,
+    color: AppColors.textPrimary,
   },
+
+  // Clear Button
   clearButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: AppSizes.buttonSm,
+    height: AppSizes.buttonSm,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 2,
   },
-  clearImage: {
-    width: 25,
-    height: 25,
-  },
+
+  // Mic Button (Normal State)
   micButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: AppSizes.buttonMd,
+    height: AppSizes.buttonMd,
+    borderRadius: AppSizes.buttonMd / 2,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
   },
   micImageContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: AppSizes.buttonSm,
+    height: AppSizes.buttonSm,
+    borderRadius: AppSizes.buttonSm / 2,
     justifyContent: 'center',
     alignItems: 'center',
-    fontWeight: 'bold',
   },
   micImage: {
-    width: 25,
-    height: 25,
+    width: AppSizes.iconSm,
+    height: AppSizes.iconSm,
+    resizeMode: 'contain',
   },
+
   sendButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 30,
-    backgroundColor: '#174054',
+    width: AppSizes.buttonMd,
+    height: AppSizes.buttonMd,
+    borderRadius: AppSizes.buttonMd / 2,
+    backgroundColor: AppColors.terracotta,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
+    ...AppShadows.md,
   },
   sendImage: {
-    width: 22,
-    height: 22,
+    width: AppSizes.iconMd,
+    height: AppSizes.iconMd,
+    resizeMode: 'contain',
   },
   tableContainer: {
     marginVertical: 10,

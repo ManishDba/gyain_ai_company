@@ -9,7 +9,7 @@ const Loader = () => {
         <Modal transparent={true} animationType="none" visible={loader}>
             <View style={styles.overlay}>
                 <View style={styles.spinnerContainer}>
-                    <ActivityIndicator size="large" color="#ff4e14" />
+                    <ActivityIndicator size="large" color="#191919" />
                 </View>
             </View>
         </Modal>

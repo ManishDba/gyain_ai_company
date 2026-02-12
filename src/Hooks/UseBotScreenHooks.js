@@ -1204,7 +1204,7 @@ setMatchSlugs(response.data.results);
 
       let slugs = [];
 
-      if (botLevel === 1) {
+      if (true) {
         slugs = response.data.results
           .filter(
             item => item.division === catagoryName && item.visible !== false,
@@ -2107,85 +2107,86 @@ setMatchSlugs(response.data.results);
     return replaceWords(lastWords);
   };
 
-  useEffect(() => {
-    VoiceToText.addEventListener(VoiceToTextEvents.START, () => {
-      setIsRecording(true);
-      setSttStatus('Listening...');
-      setPartialText('');
-    });
+useEffect(() => {
+  VoiceToText.addEventListener(VoiceToTextEvents.START, () => {
+    setIsRecording(true);
+    setSttStatus('Listening...');
+    setPartialText('');
+  });
 
-    VoiceToText.addEventListener(VoiceToTextEvents.END, () => {
+  VoiceToText.addEventListener(VoiceToTextEvents.END, () => {
+    setIsRecording(false);
+    setSttStatus('Disconnected');
+    setPartialText('');
+  });
+
+  VoiceToText.addEventListener(VoiceToTextEvents.RESULTS, event => {
+    if (event?.value) {
+      setInputText(event.value);
+    }
+    setSttStatus('Finalized');
+    setIsRecording(false);
+    setPartialText('');
+  });
+
+  VoiceToText.addEventListener(VoiceToTextEvents.PARTIAL_RESULTS, event => {
+    if (event?.value) {
+      setPartialText(event.value);
+    }
+    setSttStatus('Listening...');
+  });
+
+  VoiceToText.addEventListener(VoiceToTextEvents.ERROR, event => {
+    console.log('VoiceToText Error:', event);
+    setSttStatus('Error');
+    setIsRecording(false);
+    setPartialText('');
+  });
+}, []);
+
+
+useFocusEffect(
+  useCallback(() => {
+    return () => {
+      try {
+        VoiceToText.stopListening();
+      } catch (e) {}
       setIsRecording(false);
       setSttStatus('Disconnected');
-      setPartialText('');
-    });
+    };
+  }, [])
+);
 
-    VoiceToText.addEventListener(VoiceToTextEvents.RESULTS, event => {
-      if (event && event.value) {
-        const replacedText = replaceWords(event.value);
-        setInputText(replacedText);
-      }
-      setSttStatus('Finalized');
+const toggleRecording = async () => {
+  const hasPermission = await requestMicrophonePermission();
+  if (!hasPermission) {
+    setSttStatus('Mic permission denied');
+    return;
+  }
+
+  try {
+    if (isRecording) {
+      await VoiceToText.stopListening();
       setIsRecording(false);
-      setPartialText('');
-    });
+      setSttStatus('Disconnected');
 
-    VoiceToText.addEventListener(VoiceToTextEvents.PARTIAL_RESULTS, event => {
-      if (event && event.value) {
-        const replacedPartial = replacePartialWords(event.value, 10);
-        setPartialText(replacedPartial);
-      }
-      setSttStatus('Listening...');
-    });
-
-    VoiceToText.addEventListener(VoiceToTextEvents.ERROR, event => {
-      console.error('VoiceToText Error:', event);
-      setSttStatus('Error');
-      setIsRecording(false);
-      setPartialText('');
-    });
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      return () => {
-        VoiceToText.stopListening();
-        setIsRecording(false);
-        setSttStatus('Disconnected');
-      };
-    }, []),
-  );
-
-  const toggleRecording = async () => {
-    const hasPermission = await requestMicrophonePermission();
-    if (!hasPermission) {
-      setSttStatus('Mic permission denied');
-      return;
-    }
-
-    try {
-      if (isRecording) {
-        await VoiceToText.stopListening();
-        setIsRecording(false);
-        setSttStatus('Disconnected');
-        if (partialText) {
-          setInputText(partialText);
-          setPartialText('');
-        }
-      } else {
-        await VoiceToText.stopListening().catch(() => {});
-        setInputText('');
+      if (partialText) {
+        setInputText(partialText);
         setPartialText('');
-        setSttStatus('Listening...');
-        await VoiceToText.startListening();
-        setIsRecording(true);
       }
-    } catch (error) {
-      console.log('VoiceToText error:', error);
-      setSttStatus('Error');
-      setIsRecording(false);
+    } else {
+      await VoiceToText.stopListening().catch(() => {});
+      setInputText('');
+      setPartialText('');
+      setSttStatus('Listening...');
+      await VoiceToText.startListening();
+      setIsRecording(true);
     }
-  };
+  } catch (e) {
+    setSttStatus('Error');
+    setIsRecording(false);
+  }
+};
 
   // useEffect(() => {
   //   fetchCorrespondents();

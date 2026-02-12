@@ -1,42 +1,32 @@
+// Footer.js
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, InteractionManager } from 'react-native';
-import { useNavigation, useFocusEffect, CommonActions } from '@react-navigation/native';
-import Icons from '../../env/icons';
+import { View, StyleSheet, TouchableOpacity, InteractionManager } from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSelector } from "react-redux";
-
-const Footer = () => {
+ 
+const Footer = React.memo(() => {
   const navigation = useNavigation();
   const [activeButton, setActiveButton] = useState('HomeScreen');
-  const configData = useSelector((state) => state.usersSlice.config || {}); 
-
+  const configData = useSelector((state) => state.usersSlice.config || {});
+ 
   useFocusEffect(
     useCallback(() => {
       try {
         const state = navigation.getState();
         if (state && state.routes && state.index >= 0) {
           const currentRouteName = state.routes[state.index].name;
-          
-          // Map screen names to footer button names
-          const screenMapping = {
-            'HomeScreen': 'HomeScreen',
-            'DashboardScreen': 'DashboardScreen',
-            'BotCategory': 'BotCategory',
-            'DataScreen': 'BotCategory', // DataScreen should highlight BotCategory
-            'DashboardDetailScreen': 'DashboardScreen', // Detail screen highlights Dashboard
-          };
-          
-          setActiveButton(screenMapping[currentRouteName] || currentRouteName);
+          setActiveButton(currentRouteName);
         }
       } catch (error) {
         console.log("Navigation state error:", error);
       }
     }, [navigation])
   );
-
-  // ✅ UPDATED handlePress function
-  const handlePress = (navigateTo) => {
+ 
+  const handlePress = useCallback((navigateTo) => {
     let destination = navigateTo;
-
+ 
     if (navigateTo === 'BotCategory') {
       const botLevel = configData[0]?.bot_level;
       if (botLevel === 1) {
@@ -45,102 +35,99 @@ const Footer = () => {
         destination = 'BotCategory';
       }
     }
-
+ 
     setActiveButton(destination);
-    
     InteractionManager.runAfterInteractions(() => {
       if (destination !== activeButton) {
-        // ✅ Use dispatch with NAVIGATE action directly
-        navigation.dispatch(
-          CommonActions.navigate({
-            name: destination,
-          })
-        );
+        navigation.navigate(destination);
       }
     });
-  };
-
-  const FooterButton = ({ title, iconName, navigateTo }) => {
-    const isActive = activeButton === navigateTo 
-    || (activeButton === 'DocumentScreen' && navigateTo=== 'DocumentCategory' ) 
-    || (activeButton === 'DataSetsScreen' && navigateTo=== 'DataSetCategory' ) 
-    || (activeButton === 'DataScreen' && navigateTo=== 'BotCategory' );
-
+  }, [activeButton, configData, navigation]);
+ 
+  const FooterButton = React.memo(({ iconName, navigateTo }) => {
+    const isActive = activeButton === navigateTo
+      || (activeButton === 'DocumentScreen' && navigateTo === 'DocumentCategory')
+      || (activeButton === 'DataSetsScreen' && navigateTo === 'DataSetCategory')
+      || (activeButton === 'DataScreen' && navigateTo === 'BotCategory');
+ 
+    const getIconName = () => {
+      if (!isActive) return iconName;
+      return iconName.replace('-outline', '');
+    };
+ 
     return (
       <TouchableOpacity
-        activeOpacity={0.5}
+        activeOpacity={0.7}
         style={[styles.button, isActive && styles.activeButton]}
         onPress={() => handlePress(navigateTo)}
       >
-        <View style={styles.iconContainer}>
-          <Image source={iconName} style={[styles.icon, { tintColor: isActive ? '#ffcc00' : '#fff' }]} />
-        </View>
-        <Text style={[styles.buttonText, isActive && styles.activeText]}>{title}</Text>
+        <Ionicons
+          name={getIconName()}
+          size={24}
+          color={isActive ? '#1C1C1E' : '#FFFFFF'}
+        />
       </TouchableOpacity>
     );
-  };
-
+  });
+ 
   return (
-    <View style={styles.footer}>
-      <View style={styles.buttonContainer}>
-        <FooterButton title="Home" iconName={Icons.Icon15} navigateTo="HomeScreen" />
-        <FooterButton title="Bot" iconName={Icons.Icon14} navigateTo="BotCategory" />
-        <FooterButton title="Dashboard" iconName={Icons.Icon17} navigateTo="DashboardScreen" />
+    <View style={styles.footerWrapper}>
+      <View style={styles.footer}>
+        <FooterButton
+          iconName="home-outline"
+          navigateTo="HomeScreen"
+        />
+        <FooterButton
+          iconName="chatbubbles-outline"
+          navigateTo="BotCategory"
+        />
+        <FooterButton
+          iconName="grid-outline"
+          navigateTo="DashboardScreen"
+        />
+        <FooterButton
+          iconName="person-outline"
+          navigateTo="Profile"
+        />
       </View>
     </View>
   );
-};
-
+});
+ 
 const styles = StyleSheet.create({
-  footer: {
-    bottom: 0,
+  footerWrapper: {
+    position: 'absolute',
+    bottom: 30,
     left: 0,
     right: 0,
-    height: 75,
-    backgroundColor: '#174054',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    paddingBottom: 10,
-    borderTopColor: '#ffffff',
-    elevation: 4,
   },
-  buttonContainer: {
+  footer: {
     flexDirection: 'row',
-    justifyContent: "space-between",
-    alignItems: 'center',
-    width: '70%',
+    backgroundColor: '#191919',
+    borderRadius: 30,
+    paddingVertical: 5,
     paddingHorizontal: 10,
-    padding: 12
+    shadowColor: '#191919',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
   },
   button: {
-    flex: 1,
+    width: 44,
+    height: 44,
     alignItems: 'center',
-    paddingVertical: 10,
+    justifyContent: 'center',
+    borderRadius: 22,
   },
   activeButton: {
-    backgroundColor: '#112d3a', 
-    borderRadius: 10, 
-    padding: 5
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 8,
-    marginTop: 5,
-  },
-  activeText: {
-    fontWeight: 'bold',
-    color: '#ffcc00',
-  },
-  iconContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  icon: {
-    width: 20,
-    height: 20,
-    resizeMode: 'contain',
+    backgroundColor: '#E5E4DF',
   },
 });
-
+ 
 export default Footer;

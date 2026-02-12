@@ -8,8 +8,8 @@ import Svg, {
 } from "react-native-svg";
 
 const colors = [
-  "rgb(16, 163, 127)", "rgb(23, 64, 84)", "#B5EAD7", "#FFDAC1", "#E2A9E5",
-  "#FFC3A0", "#C7EFCF", "#F7C6C7", "#A2D2FF", "#FDCBBA",
+ '#fee825', '#b6de2b', '#6cce5a', '#1f9d8a', '#26838f',
+  '#31678e', '#3f4a8a', '#482777', '#5e4fa2', '#3288bd',
 ];
 
 const BarChartComponent = ({ title, data = [], labels = [], chartConfig, style }) => {
